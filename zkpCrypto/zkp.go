@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/sha256"
-	"fmt"
 	"math/big"
 	"math/rand"
 	"time"
@@ -30,7 +29,7 @@ func DiscreteLogKnowledge(x big.Int, g big.Int, p big.Int, q big.Int) (big.Int, 
 
 	// Compute t
 	v.Rand(randGen, &q) // v = rand() mod q
-	t.Exp(&g, &v, &p) // t = g^v mod p
+	t.Exp(&g, &v, &p)   // t = g^v mod p
 
 	// Compute c = SHA256(g,y,t)
 	h.Write(g.Bytes()[:])
@@ -55,13 +54,9 @@ func DiscreteLogEquality(x big.Int, g []big.Int, p big.Int, q big.Int) ([]big.In
 	h := sha256.New() // h can be used to calculate the sha256
 
 	// Set up random number generator
-	// randGen := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-	randGen := rand.New(rand.NewSource(690))
+	randGen := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 
 	var v, c, A, r big.Int
-
-	// fmt.Println("G = ")
-	// fmt.Println(g)
 
 	// Compute t
 	v.Rand(randGen, &q)
@@ -83,18 +78,42 @@ func DiscreteLogEquality(x big.Int, g []big.Int, p big.Int, q big.Int) ([]big.In
 	c.SetBytes(h.Sum(nil))
 	c.Mod(&c, &q) // c = c mod q
 
-	fmt.Print("c = ")
-	fmt.Println(c.String())
-
 	// Calculate r = v - cx mod q
 	A.Mul(&c, &x) // A = c*x
 	r.Sub(&v, &A) // r = v - c*x
 	r.Mod(&r, &q) // r = r mod q
 
-	// one := big.NewInt(1)
-	// var pMinusOne big.Int
-	// pMinusOne.Sub(&p, one)
-	// r.Mod(&r, &pMinusOne)
-
 	return t, r
+}
+
+func GenerateGs(p *big.Int, q *big.Int, numGs int) (G []big.Int) {
+	for i := 0; i < numGs; i++ {
+		G = append(G, GenerateG(p, q))
+	}
+	return
+}
+
+func GenerateG(p *big.Int, q *big.Int) (g big.Int) {
+	var j, pMinusOne, h big.Int
+
+	// calculate p - 1
+	pMinusOne.Sub(p, One)
+	j.Div(&pMinusOne, q)
+
+	// set up random number generator
+	randGen := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+
+	for {
+		// find random number not equal to 1
+		for {
+			h.Rand(randGen, &pMinusOne)
+			if h.Cmp(One) != 0 {
+				break
+			}
+		}
+		g.Exp(&h, &j, p)     // G[i] = h^j mod p
+		if g.Cmp(One) != 0 { // if it's not 1, we are done
+			return
+		}
+	}
 }
