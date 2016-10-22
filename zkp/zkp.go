@@ -1,4 +1,4 @@
-package main
+package zkp
 
 import (
 	"crypto/sha256"
@@ -11,7 +11,7 @@ import (
  * https://en.wikipedia.org/wiki/Fiat%E2%80%93Shamir_heuristic
  */
 
-func ComputeCSingle(g big.Int, y big.Int, t big.Int, q big.Int) (c big.Int) {
+func computeCSingle(g big.Int, y big.Int, t big.Int, q big.Int) (c big.Int) {
 	// Verification
 	h := sha256.New()
 
@@ -36,11 +36,11 @@ func DiscreteLogKnowledge(x big.Int, g big.Int, p big.Int, q big.Int) (big.Int, 
 	y.Exp(&g, &x, &p) // y = g^x mod p
 
 	// Compute t
-	v.Rand(randGen, &q) // v = rand() mod q
+	v.Rand(RandGen, &q) // v = rand() mod q
 	t.Exp(&g, &v, &p)   // t = g^v mod p
 
 	// Compute c = SHA256(g,y,t) mod q
-	c = ComputeCSingle(g, y, t, q)
+	c = computeCSingle(g, y, t, q)
 
 	// Calculate r = v - cx
 	A.Mul(&c, &x) // A = c * x
@@ -50,7 +50,7 @@ func DiscreteLogKnowledge(x big.Int, g big.Int, p big.Int, q big.Int) (big.Int, 
 	return t, r
 }
 
-func ComputeCMany(g []big.Int, Y []big.Int, t []big.Int, q big.Int) (c big.Int) {
+func computeCMany(g []big.Int, Y []big.Int, t []big.Int, q big.Int) (c big.Int) {
 	h := sha256.New() // h can be used to calculate the sha256
 
 	for i := 0; i < len(g); i++ {
@@ -73,7 +73,7 @@ func DiscreteLogEquality(x big.Int, g []big.Int, p big.Int, q big.Int) ([]big.In
 	var v, c, A, r big.Int
 
 	// Compute t
-	v.Rand(randGen, &q)
+	v.Rand(RandGen, &q)
 	t := make([]big.Int, len(g))
 	Y := make([]big.Int, len(g))
 
@@ -83,7 +83,7 @@ func DiscreteLogEquality(x big.Int, g []big.Int, p big.Int, q big.Int) ([]big.In
 	}
 
 	// Compute c = H(g[i], Y[i], t[i])
-	c = ComputeCMany(g, Y, t, q)
+	c = computeCMany(g, Y, t, q)
 
 	// Calculate r = v - cx mod q
 	A.Mul(&c, &x) // A = c*x
@@ -110,7 +110,7 @@ func GenerateG(p *big.Int, q *big.Int) big.Int {
 	for {
 		// find random number not equal to 1
 		for {
-			h.Rand(randGen, &pMinusOne)
+			h.Rand(RandGen, &pMinusOne)
 			if h.Cmp(One) != 0 {
 				break
 			}
@@ -128,7 +128,7 @@ func GenerateG(p *big.Int, q *big.Int) big.Int {
 func CheckDiscreteLogKnowledgeProof(g big.Int, y big.Int, t big.Int, r big.Int, p big.Int, q big.Int) (err error) {
 	var tv big.Int
 
-	c := ComputeCSingle(g, y, t, q)
+	c := computeCSingle(g, y, t, q)
 
 	// Compute tv = g^r * y^c mod p
 	tv.Exp(&g, &r, &p)
@@ -149,7 +149,7 @@ func CheckDiscreteLogEqualityProof(G []big.Int, Y []big.Int, t []big.Int, r big.
 	// Verification
 	var tv, c, n big.Int
 
-	c = ComputeCMany(G, Y, t, *Q)
+	c = computeCMany(G, Y, t, *Q)
 
 	for i := 0; i < len(G); i++ {
 		// Compute tv = g^r * y^c mod P
