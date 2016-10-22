@@ -3,14 +3,10 @@ package main
 import (
 	"crypto/sha256"
 	"math/big"
-	"math/rand"
 	"testing"
-	"time"
 )
 
 func TestDiscreteLogKnowledge(test *testing.T) {
-	randGen := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-
 	for i := 0; i < NumTests; i++ {
 		var x, y big.Int
 
@@ -42,14 +38,14 @@ func TestDiscreteLogKnowledge(test *testing.T) {
 
 		// So what do we have here?
 		if t.Cmp(&tv) != 0 {
-			test.Error("Expected " + tv.String() + ", got " + t.String())
+			test.Error("WRONG! Expected " + tv.String() + ", got " + t.String())
+		} else {
+			test.Log("RIGHT! Expected " + tv.String() + ", got " + t.String())
 		}
 	}
 }
 
 func TestDiscreteLogEquality(test *testing.T) {
-	randGen := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-
 	for i := 0; i < NumTests; i++ {
 
 		// Generate private key
@@ -91,5 +87,6 @@ func TestDiscreteLogEquality(test *testing.T) {
 				test.Log("RIGHT! " + G[i].String() + " Expected " + tv.String() + ", got " + t[i].String())
 			}
 		}
+		test.Log("Next test\n\n")
 	}
 }

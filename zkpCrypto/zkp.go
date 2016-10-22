@@ -3,8 +3,6 @@ package main
 import (
 	"crypto/sha256"
 	"math/big"
-	"math/rand"
-	"time"
 )
 
 /*
@@ -17,9 +15,6 @@ import (
 // (t, r). The total size of the ZKP is log p + log q bits.
 func DiscreteLogKnowledge(x big.Int, g big.Int, p big.Int, q big.Int) (big.Int, big.Int) {
 	h := sha256.New() // h can be used to calculate the sha256
-
-	// Set up random number generator
-	randGen := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 
 	// A is a temporary variable for below
 	var v, t, c, r, A, y big.Int
@@ -52,9 +47,6 @@ func DiscreteLogKnowledge(x big.Int, g big.Int, p big.Int, q big.Int) (big.Int, 
 // log q bits.
 func DiscreteLogEquality(x big.Int, g []big.Int, p big.Int, q big.Int) ([]big.Int, big.Int) {
 	h := sha256.New() // h can be used to calculate the sha256
-
-	// Set up random number generator
-	randGen := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 
 	var v, c, A, r big.Int
 
@@ -93,15 +85,12 @@ func GenerateGs(p *big.Int, q *big.Int, numGs int) (G []big.Int) {
 	return
 }
 
-func GenerateG(p *big.Int, q *big.Int) (g big.Int) {
-	var j, pMinusOne, h big.Int
+func GenerateG(p *big.Int, q *big.Int) big.Int {
+	var j, pMinusOne, h, g big.Int
 
-	// calculate p - 1
+	// calculate (p - 1)
 	pMinusOne.Sub(p, One)
 	j.Div(&pMinusOne, q)
-
-	// set up random number generator
-	randGen := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 
 	for {
 		// find random number not equal to 1
@@ -113,7 +102,7 @@ func GenerateG(p *big.Int, q *big.Int) (g big.Int) {
 		}
 		g.Exp(&h, &j, p)     // G[i] = h^j mod p
 		if g.Cmp(One) != 0 { // if it's not 1, we are done
-			return
+			return g
 		}
 	}
 }
