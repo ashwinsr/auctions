@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/sha256"
 	"math/big"
 	"testing"
 )
@@ -19,28 +18,10 @@ func TestDiscreteLogKnowledge(test *testing.T) {
 		// Generate zero-knowledge proof
 		t, r := DiscreteLogKnowledge(x, g, *P, *Q)
 
-		// Verification
-		h := sha256.New()
-		var tv, c big.Int
+		err := CheckDiscreteLogKnowledgeProof(g, y, t, r, *P, *Q)
 
-		// Compute c = SHA256(g,y,t)
-		h.Write(g.Bytes()[:])
-		h.Write(y.Bytes()[:])
-		h.Write(t.Bytes()[:])
-		c.SetBytes(h.Sum(nil))
-		c.Mod(&c, Q) // c = c mod Q
-
-		// Compute tv = g^r * y^c mod P
-		tv.Exp(&g, &r, P)
-		c.Exp(&y, &c, P)
-		tv.Mul(&tv, &c)
-		tv.Mod(&tv, P)
-
-		// So what do we have here?
-		if t.Cmp(&tv) != 0 {
-			test.Error("WRONG! Expected " + tv.String() + ", got " + t.String())
-		} else {
-			test.Log("RIGHT! Expected " + tv.String() + ", got " + t.String())
+		if err != nil {
+			test.Error(err)
 		}
 	}
 }
@@ -54,39 +35,19 @@ func TestDiscreteLogEquality(test *testing.T) {
 
 		G := GenerateGs(P, Q, 10)
 
-		// Generate zero-knowledge proof
-		t, r := DiscreteLogEquality(x, G, *P, *Q)
-
-		// Verification
-		h := sha256.New()
-		var tv, c, n big.Int
-
 		// Compute c
 		Y := make([]big.Int, len(G))
 		for i := 0; i < len(G); i++ {
 			Y[i].Exp(&G[i], &x, P)
-			h.Write(G[i].Bytes()[:])
-			h.Write(Y[i].Bytes()[:])
-			h.Write(t[i].Bytes()[:])
 		}
 
-		c.SetBytes(h.Sum(nil))
-		c.Mod(&c, Q) // c = c mod Q
+		// Generate zero-knowledge proof
+		t, r := DiscreteLogEquality(x, G, *P, *Q)
 
-		for i := 0; i < len(G); i++ {
-			// Compute tv = g^r * y^c mod P
-			tv.Exp(&G[i], &r, P)
-			n.Exp(&Y[i], &c, P)
-			tv.Mul(&tv, &n)
-			tv.Mod(&tv, P)
+		err := CheckDiscreteLogEqualityProof(G, Y, t, r, *P, *Q)
 
-			// So what do we have here?
-			if t[i].Cmp(&tv) != 0 {
-				test.Error("WRONG! " + G[i].String() + " Expected " + tv.String() + ", got " + t[i].String())
-			} else {
-				test.Log("RIGHT! " + G[i].String() + " Expected " + tv.String() + ", got " + t[i].String())
-			}
+		if err != nil {
+			test.Error(err)
 		}
-		test.Log("Next test\n\n")
 	}
 }
