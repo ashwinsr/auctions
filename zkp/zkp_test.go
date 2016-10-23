@@ -1,4 +1,4 @@
-package main
+package zkp
 
 import (
 	"math/big"
@@ -10,9 +10,10 @@ func TestDiscreteLogKnowledge(test *testing.T) {
 		var x, y big.Int
 
 		g := GenerateG(P, Q)
+		// test.Logf("g = %v", g)
 
 		// Generate private key, public key pair
-		x.Rand(randGen, Q) // x = rand() mod Q // TODO also shouldn't be 0
+		x.Rand(RandGen, Q) // x = rand() mod Q // TODO also shouldn't be 0
 		y.Exp(&g, &x, P)   // y = g^x mod P
 
 		// Generate zero-knowledge proof
@@ -31,11 +32,10 @@ func TestDiscreteLogEquality(test *testing.T) {
 
 		// Generate private key
 		var x big.Int
-		x.Rand(randGen, Q)
+		x.Rand(RandGen, Q)
 
 		G := GenerateGs(P, Q, 10)
 
-		// Compute c
 		Y := make([]big.Int, len(G))
 		for i := 0; i < len(G); i++ {
 			Y[i].Exp(&G[i], &x, P)
