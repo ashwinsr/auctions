@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	// "fmt"
 	"log"
 	"math/big"
 	"net"
@@ -16,16 +17,16 @@ import (
 	google_protobuf "github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
 
-	"net/http"
+	// "net/http"
 	_ "net/http/pprof"
 )
 
 // TODO debugging
-func init() {
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-}
+// func init() {
+//   go func() {
+//     log.Println(http.ListenAndServe("localhost:6060", nil))
+//   }()
+// }
 
 // Need to convert to using command line options for a lot of these
 
@@ -121,7 +122,7 @@ func initClients(hosts []string, myAddr string) {
 		if err != nil {
 			log.Fatalf("Did not connect (to host %v): %v", host, err)
 		}
-		defer conn.Close()
+		// defer conn.Close() TODO: This needs to happen at somepoint, but not here
 		c := pb.NewZKPAuctionClient(conn)
 
 		clients = append(clients, c)
@@ -145,6 +146,9 @@ func main() {
 
 	myState.keyDistribution()
 
+	// for {
+	// }
+
 	// TODO debugging
 	// if *id == 1 {
 	// 	for {
@@ -166,7 +170,7 @@ func (s *state) keyDistribution() {
 	// Generate private key
 	s.myPrivateKey.Rand(zkp.RandGen, zkp.Q)
 	// Calculate public key
-	s.myPublicKey.Exp(zkp.Q, &s.myPrivateKey, zkp.P)
+	s.myPublicKey.Exp(zkp.G, &s.myPrivateKey, zkp.P)
 
 	log.Printf("My public key: %v\n", s.myPublicKey)
 
@@ -174,23 +178,24 @@ func (s *state) keyDistribution() {
 	t, r := zkp.DiscreteLogKnowledge(s.myPrivateKey, *zkp.G, *zkp.P, *zkp.Q)
 	// Create proto structure of zkp
 	zkpPrivKey := &pb.DiscreteLogKnowledge{T: t.Bytes(), R: r.Bytes()}
+	log.Printf("Sending t=%v, r=%v", t, r)
 
 	// TODO debugging
 	// if *id == 0 {
 	// Publish public key to all clients
 	for _, client := range clients {
 		log.Println("Sending key to client...")
-		go func() {
-			_, err := client.SendKey(context.Background(),
-				&pb.Key{
-					Key:   s.myPublicKey.Bytes(),
-					Proof: zkpPrivKey,
-				})
-
-			if err != nil {
-				log.Fatalf("Error on sending key: %v", err)
-			}
-		}()
+		// go func() {
+		// TODO: This doesn't need to be in a Go routine, does it?
+		_, err := client.SendKey(context.Background(),
+			&pb.Key{
+				Key:   s.myPublicKey.Bytes(),
+				Proof: zkpPrivKey,
+			})
+		if err != nil {
+			log.Fatalf("Error on sending key: %v", err)
+		}
+		// }()
 	}
 
 	s.keys = append(s.keys, s.myPublicKey)
