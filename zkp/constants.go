@@ -19,6 +19,7 @@ var Y_Mill = big.NewInt(19044154)
 var K_Mill uint = 64
 
 var One = big.NewInt(1)
+var Two = big.NewInt(2)
 var FortyTwo = big.NewInt(42)
 
 var RandGen = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
