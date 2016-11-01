@@ -38,6 +38,12 @@ type state struct {
 	myPublicKey  big.Int
 	keys         []big.Int
 	publicKey    big.Int
+
+	// TODO millionaire specific
+	myAlphasBetas     *AlphaBetaStruct
+	theirAlphasBetas  *AlphaBetaStruct
+	myGammasDeltas    *GammaDeltaStruct
+	theirGammasDeltas *GammaDeltaStruct
 }
 
 // TODO don't be such a compelte piece of shit
@@ -53,7 +59,7 @@ var (
 	keyChan chan big.Int = make(chan big.Int) // TODO bother with buffer?
 
 	// TODO millionaire specific
-	alphaBetaChan chan AlphaBetaStruct = make(chan AlphaBetaStruct)
+	alphaBetaChan chan *AlphaBetaStruct = make(chan *AlphaBetaStruct)
 )
 
 // TODO millionaire specific
@@ -130,10 +136,17 @@ func (s *server) MillionaireAlphaBeta(ctx context.Context, in *pb.AlphaBeta) (*g
 	log.Printf("Received Betas: %v", abs.betas)
 
 	go func() {
-		alphaBetaChan <- abs
+		alphaBetaChan <- &abs
 	}()
 
 	return &google_protobuf.Empty{}, nil
+}
+
+func (s *server) MillionaireGammaDelta1(ctx context.Context, in *pb.Key) (*google_protobuf.Empty, error) {
+}
+func (s *server) MillionaireGammaDelta2(ctx context.Context, in *pb.Key) (*google_protobuf.Empty, error) {
+}
+func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.Key) (*google_protobuf.Empty, error) {
 }
 
 // Listens for connections; meant to be run in a goroutine
@@ -200,7 +213,9 @@ func main() {
 
 	myState.keyDistribution()
 
-	myState.alphaBetaDistribute()
+	// TODO millionaire specific shit
+	myState.millionaire_AlphaBetaDistribute()
+	myState.millionaire_MixOutput1()
 
 	// TODO do this better
 	for {
@@ -266,10 +281,11 @@ func (s *state) keyDistribution() {
 	s.publicKey.Mod(&s.publicKey, zkp.P)
 }
 
-func (s *state) alphaBetaDistribute() {
+func (s *state) millionaire_AlphaBetaDistribute() {
 	// Publish alphas and betas to all of the clients
 
 	var alphas, betas [][]byte
+	var alphasInts, betasInts []big.Int
 
 	var proofs []*pb.EqualsOneOfTwo
 
@@ -294,7 +310,9 @@ func (s *state) alphaBetaDistribute() {
 
 		log.Printf("alphaJ: %v\n", alphaJ)
 		alphas = append(alphas, alphaJ.Bytes())
+		alphasInts = append(alphasInts, alphaJ)
 		betas = append(betas, betaJ.Bytes())
+		betasInts = append(betasInts, betaJ)
 
 		var m big.Int
 		if Bij == 1 {
@@ -340,5 +358,20 @@ func (s *state) alphaBetaDistribute() {
 			}
 		}()
 	}
+
+	s.myAlphasBetas = &AlphaBetaStruct{
+		alphas: alphasInts,
+		betas:  betasInts,
+	}
+
+	// Wait for alphas and betas of other client
+	// TODO len should just be 1
+	// TODO error handling
+	for i := 0; i < len(clients); i++ {
+		s.theirAlphasBetas = <-alphaBetaChan
+	}
+}
+
+func (s *state) millionaire_MixOutput1() {
 
 }
