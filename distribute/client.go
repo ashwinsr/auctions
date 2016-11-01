@@ -259,7 +259,7 @@ func (s *state) keyDistribution() {
 
 	// Calculating final public key
 	// TODO SHOULD THIS BE MOD P? Probably doesn't matter, but just for computational practicality
-	s.publicKey = *zkp.One
+	s.publicKey.Set(zkp.One)
 	for _, key := range s.keys {
 		s.publicKey.Mul(&s.publicKey, &key)
 	}
@@ -296,14 +296,14 @@ func (s *state) alphaBetaDistribute() {
 		alphas = append(alphas, alphaJ.Bytes())
 		betas = append(betas, betaJ.Bytes())
 
-		var m *big.Int
+		var m big.Int
 		if Bij == 1 {
-			m = zkp.Y_Mill
+			m.Set(zkp.Y_Mill)
 		} else {
-			m = zkp.One
+			m.Set(zkp.One)
 		}
 		a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 :=
-			zkp.EncryptedValueIsOneOfTwo(*m, s.publicKey, rJ, *zkp.G,
+			zkp.EncryptedValueIsOneOfTwo(m, s.publicKey, rJ, *zkp.G,
 				*zkp.Y_Mill, *zkp.P, *zkp.Q)
 
 		if err := zkp.CheckEncryptedValueIsOneOfTwo(alphaJ, betaJ, *zkp.P, *zkp.Q,

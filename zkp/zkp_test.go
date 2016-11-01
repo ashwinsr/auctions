@@ -67,8 +67,8 @@ func TestEncryptedValueIsOneOfTwo(test *testing.T) {
 		r.Rand(RandGen, Q) // r = rand() mod Q
 
 		// Test case 1: m = 1 and z = 42 returns TRUE
-		m = *One
-		z = *FortyTwo
+		m.Set(One)
+		z.Set(FortyTwo)
 
 		alpha.Exp(&y, &r, P)
 		alpha.Mul(&alpha, &m)
@@ -83,8 +83,8 @@ func TestEncryptedValueIsOneOfTwo(test *testing.T) {
 		}
 
 		// Test case 2: m = z = random value return TRUE
-		m = *FortyTwo
-		z = *FortyTwo
+		m.Set(FortyTwo)
+		z.Set(FortyTwo)
 
 		alpha.Exp(&y, &r, P)
 		alpha.Mul(&alpha, &m)
