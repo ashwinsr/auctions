@@ -259,9 +259,11 @@ func (s *state) keyDistribution() {
 
 	// Calculating final public key
 	// TODO SHOULD THIS BE MOD P? Probably doesn't matter, but just for computational practicality
+	s.publicKey = *zkp.One
 	for _, key := range s.keys {
 		s.publicKey.Mul(&s.publicKey, &key)
 	}
+	s.publicKey.Mod(&s.publicKey, zkp.P)
 }
 
 func (s *state) alphaBetaDistribute() {
@@ -280,7 +282,8 @@ func (s *state) alphaBetaDistribute() {
 		Bij := (((*bid) >> j) & 1)
 
 		// calculate alpha_j
-		alphaJ.Exp(&myState.publicKey, &rJ, zkp.P) // TODO mod P?
+		log.Printf("Public key: %v, Rj: %v, P: %v\n", s.publicKey, rJ, *zkp.P)
+		alphaJ.Exp(&s.publicKey, &rJ, zkp.P) // TODO mod P?
 		if Bij == 1 {
 			alphaJ.Mul(&alphaJ, zkp.Y_Mill)
 			alphaJ.Mod(&alphaJ, zkp.P)
@@ -289,6 +292,7 @@ func (s *state) alphaBetaDistribute() {
 		// calculate beta_j
 		betaJ.Exp(zkp.G, &rJ, zkp.P)
 
+		log.Printf("alphaJ: %v\n", alphaJ)
 		alphas = append(alphas, alphaJ.Bytes())
 		betas = append(betas, betaJ.Bytes())
 
@@ -299,8 +303,14 @@ func (s *state) alphaBetaDistribute() {
 			m = zkp.One
 		}
 		a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 :=
-			zkp.EncryptedValueIsOneOfTwo(*m, myState.publicKey, rJ, *zkp.G,
+			zkp.EncryptedValueIsOneOfTwo(*m, s.publicKey, rJ, *zkp.G,
 				*zkp.Y_Mill, *zkp.P, *zkp.Q)
+
+		if err := zkp.CheckEncryptedValueIsOneOfTwo(alphaJ, betaJ, *zkp.P, *zkp.Q,
+			a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2,
+			*zkp.G, myState.publicKey, *zkp.Y_Mill); err != nil {
+			log.Fatalf("WE ARE SENDING AN INCORRECT FUCKING PROOF")
+		}
 
 		proofs = append(proofs, &pb.EqualsOneOfTwo{
 			A_1: a_1.Bytes(),
