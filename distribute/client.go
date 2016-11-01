@@ -40,6 +40,9 @@ type state struct {
 	publicKey    big.Int
 }
 
+// TODO don't be such a compelte piece of shit
+var myState *state
+
 // channels for each round
 /*
  * These are here so that protobuf data, if received before we have moved
@@ -48,11 +51,22 @@ type state struct {
 var (
 	clients []pb.ZKPAuctionClient
 	keyChan chan big.Int = make(chan big.Int) // TODO bother with buffer?
+
+	// TODO millionaire specific
+	alphaBetaChan chan AlphaBetaStruct = make(chan AlphaBetaStruct)
 )
+
+// TODO millionaire specific
+type AlphaBetaStruct struct {
+	alphas, betas []big.Int
+}
 
 var (
 	hostsFileName = flag.String("hosts", "hosts.json", "JSON file with lists of hosts to communicate with")
 	id            = flag.Int("id", -1, "ID")
+
+	// TODO millionaire specific
+	bid = flag.Uint("bid", 0, "Amount of money")
 )
 
 // server is used to implement pb.ZKPAuctionServer
@@ -74,6 +88,49 @@ func (s *server) SendKey(ctx context.Context, in *pb.Key) (*google_protobuf.Empt
 	// put key into keyChan in a goroutine, as we want to return as soon as possible
 	go func() {
 		keyChan <- key
+	}()
+
+	return &google_protobuf.Empty{}, nil
+}
+
+// TODO millionaire specific
+// MillionaireAlphaBeta implements pb.ZKPAuctionServer
+func (s *server) MillionaireAlphaBeta(ctx context.Context, in *pb.AlphaBeta) (*google_protobuf.Empty, error) {
+	if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != zkp.K_Mill {
+		log.Fatalf("Incorrect number of shit")
+	}
+
+	var abs AlphaBetaStruct
+
+	for i := 0; i < len(in.Alphas); i++ {
+		var alpha, beta, a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 big.Int
+		alpha.SetBytes(in.Alphas[i])
+		beta.SetBytes(in.Betas[i])
+		a_1.SetBytes(in.Proofs[i].A_1)
+		a_2.SetBytes(in.Proofs[i].A_2)
+		b_1.SetBytes(in.Proofs[i].B_1)
+		b_2.SetBytes(in.Proofs[i].B_2)
+		d_1.SetBytes(in.Proofs[i].D_1)
+		d_2.SetBytes(in.Proofs[i].D_2)
+		r_1.SetBytes(in.Proofs[i].R_1)
+		r_2.SetBytes(in.Proofs[i].R_2)
+
+		if err := zkp.CheckEncryptedValueIsOneOfTwo(alpha, beta, *zkp.P, *zkp.Q,
+			a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2,
+			*zkp.G, myState.publicKey, *zkp.Y_Mill); err != nil {
+			log.Fatalf("Received incorrect zero-knowledge proof for alpha/beta")
+		}
+		// TODO change to pass protobuf structs
+		abs.alphas = append(abs.alphas, alpha)
+		abs.betas = append(abs.betas, beta)
+	}
+
+	// TODO debugging
+	log.Printf("Received Alphas: %v", abs.alphas)
+	log.Printf("Received Betas: %v", abs.betas)
+
+	go func() {
+		alphaBetaChan <- abs
 	}()
 
 	return &google_protobuf.Empty{}, nil
@@ -110,8 +167,6 @@ func getHosts() []string {
 }
 
 func initClients(hosts []string, myAddr string) {
-	// TODO debugging
-	// if *id == 0 {
 	// generate clients sequentially, not so bad
 	for _, host := range hosts {
 		if host == myAddr {
@@ -129,13 +184,12 @@ func initClients(hosts []string, myAddr string) {
 	}
 
 	log.Println("Finishing initializing clients")
-	// }
 }
 
 func main() {
 	flag.Parse()
 
-	myState := &state{}
+	myState = &state{}
 
 	hosts := getHosts()
 	myAddr := hosts[*id]
@@ -146,14 +200,11 @@ func main() {
 
 	myState.keyDistribution()
 
-	// for {
-	// }
+	myState.alphaBetaDistribute()
 
-	// TODO debugging
-	// if *id == 1 {
-	// 	for {
-	// 	}
-	// }
+	// TODO do this better
+	for {
+	}
 }
 
 /*
@@ -180,22 +231,20 @@ func (s *state) keyDistribution() {
 	zkpPrivKey := &pb.DiscreteLogKnowledge{T: t.Bytes(), R: r.Bytes()}
 	log.Printf("Sending t=%v, r=%v", t, r)
 
-	// TODO debugging
-	// if *id == 0 {
 	// Publish public key to all clients
 	for _, client := range clients {
 		log.Println("Sending key to client...")
-		// go func() {
-		// TODO: This doesn't need to be in a Go routine, does it?
-		_, err := client.SendKey(context.Background(),
-			&pb.Key{
-				Key:   s.myPublicKey.Bytes(),
-				Proof: zkpPrivKey,
-			})
-		if err != nil {
-			log.Fatalf("Error on sending key: %v", err)
-		}
-		// }()
+		go func() {
+			// Needs to be a goroutine because otherwise we block waiting for a response
+			_, err := client.SendKey(context.Background(),
+				&pb.Key{
+					Key:   s.myPublicKey.Bytes(),
+					Proof: zkpPrivKey,
+				})
+			if err != nil {
+				log.Fatalf("Error on sending key: %v", err)
+			}
+		}()
 	}
 
 	s.keys = append(s.keys, s.myPublicKey)
@@ -206,11 +255,80 @@ func (s *state) keyDistribution() {
 		s.keys = append(s.keys, <-keyChan)
 	}
 
-	// TODO debugging
 	log.Printf("Keys: %v", s.keys)
 
+	// Calculating final public key
+	// TODO SHOULD THIS BE MOD P? Probably doesn't matter, but just for computational practicality
 	for _, key := range s.keys {
-		s.publicKey.Add(&s.publicKey, &key)
+		s.publicKey.Mul(&s.publicKey, &key)
 	}
-	// }
+}
+
+func (s *state) alphaBetaDistribute() {
+	// Publish alphas and betas to all of the clients
+
+	var alphas, betas [][]byte
+
+	var proofs []*pb.EqualsOneOfTwo
+
+	var j uint
+	for j = 0; j < zkp.K_Mill; j++ {
+		var alphaJ, betaJ, rJ big.Int
+		rJ.Rand(zkp.RandGen, zkp.Q)
+
+		// get the j-th bit of bid
+		Bij := (((*bid) >> j) & 1)
+
+		// calculate alpha_j
+		alphaJ.Exp(&myState.publicKey, &rJ, zkp.P) // TODO mod P?
+		if Bij == 1 {
+			alphaJ.Mul(&alphaJ, zkp.Y_Mill)
+			alphaJ.Mod(&alphaJ, zkp.P)
+		}
+
+		// calculate beta_j
+		betaJ.Exp(zkp.G, &rJ, zkp.P)
+
+		alphas = append(alphas, alphaJ.Bytes())
+		betas = append(betas, betaJ.Bytes())
+
+		var m *big.Int
+		if Bij == 1 {
+			m = zkp.Y_Mill
+		} else {
+			m = zkp.One
+		}
+		a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 :=
+			zkp.EncryptedValueIsOneOfTwo(*m, myState.publicKey, rJ, *zkp.G,
+				*zkp.Y_Mill, *zkp.P, *zkp.Q)
+
+		proofs = append(proofs, &pb.EqualsOneOfTwo{
+			A_1: a_1.Bytes(),
+			A_2: a_2.Bytes(),
+			B_1: b_1.Bytes(),
+			B_2: b_2.Bytes(),
+			D_1: d_1.Bytes(),
+			D_2: d_2.Bytes(),
+			R_1: r_1.Bytes(),
+			R_2: r_2.Bytes(),
+		})
+	}
+
+	for _, client := range clients {
+		log.Println("Sending alpha, beta to client...")
+		log.Printf("Sending alphas: %v\n", alphas)
+		log.Printf("Sending betas: %v\n", betas)
+		go func() {
+			_, err := client.MillionaireAlphaBeta(context.Background(),
+				&pb.AlphaBeta{
+					Alphas: alphas,
+					Betas:  betas,
+					Proofs: proofs,
+				})
+			if err != nil {
+				log.Fatalf("Error on sending alpha, beta: %v", err)
+			}
+		}()
+	}
+
 }

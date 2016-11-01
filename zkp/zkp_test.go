@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TODO CHECK INCORRECT VALUES ANUNAY YOU FUCK
+
 func TestDiscreteLogKnowledge(test *testing.T) {
 	for i := 0; i < NumTests; i++ {
 		var x, y big.Int

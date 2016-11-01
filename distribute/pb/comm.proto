@@ -9,6 +9,8 @@ import "google/protobuf/empty.proto";
 service ZKPAuction {
   // Sends a key
   rpc SendKey (Key) returns (google.protobuf.Empty) {}
+
+  rpc MillionaireAlphaBeta (AlphaBeta) returns (google.protobuf.Empty) {}
 }
 
 // The request message containing the user's name.
@@ -19,7 +21,25 @@ message Key {
   DiscreteLogKnowledge proof = 2;
 }
 
+message AlphaBeta {
+  repeated bytes alphas = 1;
+  repeated bytes betas = 2;
+
+  repeated EqualsOneOfTwo proofs = 3;
+}
+
 message DiscreteLogKnowledge {
   bytes t = 1;
   bytes r = 2;
+}
+
+message EqualsOneOfTwo {
+  bytes a_1 = 1;
+  bytes a_2 = 2;
+  bytes b_1 = 3;
+  bytes b_2 = 4;
+  bytes d_1 = 5;
+  bytes d_2 = 6;
+  bytes r_1 = 7;
+  bytes r_2 = 8;
 }
