@@ -1,5 +1,4 @@
 export PATH=$PATH:$GOPATH/bin
-protoc -I distribute/pb -I $GOPATH distribute/pb/comm.proto --go_out=plugins=grpc:distribute/pb
+protoc -I pb -I $GOPATH pb/comm.proto --go_out=plugins=grpc:pb
 
-cd distribute
 go build

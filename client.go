@@ -12,7 +12,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/ashwinsr/auctions/distribute/pb"
+	"github.com/ashwinsr/auctions/millionaire"
+	"github.com/ashwinsr/auctions/pb"
 	"github.com/ashwinsr/auctions/zkp"
 	google_protobuf "github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
@@ -61,8 +62,8 @@ var (
 	keyChan chan big.Int = make(chan big.Int) // TODO bother with buffer?
 
 	// TODO millionaire specific
-	alphaBetaChan             chan *AlphaBetaStruct  = make(chan *AlphaBetaStruct)
-	exponentiatedGammasDeltas chan *GammaDeltaStruct = make(chan *GammaDeltaStruct)
+	alphaBetaChan                 chan *AlphaBetaStruct              = make(chan *AlphaBetaStruct)
+	exponentiatedGammasDeltasChan chan *millionaire.GammaDeltaStruct = make(chan *millionaire.GammaDeltaStruct)
 )
 
 // TODO millionaire specific
@@ -145,29 +146,38 @@ func (s *server) MillionaireAlphaBeta(ctx context.Context, in *pb.AlphaBeta) (*g
 	return &google_protobuf.Empty{}, nil
 }
 
-func (s *server) MillionaireGammaDelta1(ctx context.Context, in *pb.MixedOuput) (*google_protobuf.Empty, error) {
+func (s *server) MillionaireGammaDelta1(ctx context.Context, in *pb.MixedOutput) (*google_protobuf.Empty, error) {
+	return &google_protobuf.Empty{}, nil
 }
-func (s *server) MillionaireGammaDelta2(ctx context.Context, in *pb.MixedOuput) (*google_protobuf.Empty, error) {
+func (s *server) MillionaireGammaDelta2(ctx context.Context, in *pb.MixedOutput) (*google_protobuf.Empty, error) {
+	return &google_protobuf.Empty{}, nil
 }
 func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.RandomizedOutput) (*google_protobuf.Empty, error) {
 	if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != zkp.K_Mill {
 		log.Fatalf("Incorrect number of shit4")
 	}
 
-	var gds GammaDeltaStruct
+	var gds millionaire.GammaDeltaStruct
 
 	for i := 0; i < len(in.Gammas); i++ {
+		var gamma, delta big.Int
+		gamma.SetBytes(in.Gammas[i])
+		delta.SetBytes(in.Deltas[i])
+
+		gds.Gammas = append(gds.Gammas, gamma)
+		gds.Deltas = append(gds.Deltas, delta)
+
 		var bases, results, ts []big.Int
 		// TODO myGammasDeltas for now
-		bases = append(bases, s.myGammasDeltas.gammas[i])
-		bases = append(bases, s.myGammasDeltas.deltas[i])
-		results = append(results, in.Gammas[i])
-		reuslts = append(reuslts, in.Deltas[i])
+		bases = append(bases, myState.myGammasDeltas.Gammas[i])
+		bases = append(bases, myState.myGammasDeltas.Deltas[i])
+		results = append(results, gamma)
+		results = append(results, delta)
 
 		// set proof values
 		var r big.Int
-		r.SetBytes(in.Proofs.R)
-		for _, t := range in.Proofs.Ts {
+		r.SetBytes(in.Proofs[i].R)
+		for _, t := range in.Proofs[i].Ts {
 			var t_temp big.Int
 			t_temp.SetBytes(t)
 			ts = append(ts, t_temp)
@@ -176,19 +186,15 @@ func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.Randomiz
 		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
 			log.Fatalf("Received incorrect zero-knowledge proof for exponentiated gammas/deltas")
 		}
-		// TODO change to pass protobuf structs
-		gds.gammas = append(gds.gammas, gamma)
-		gds.deltas = append(gds.deltas, delta)
 	}
 
 	// TODO debugging
-	log.Printf("Received Exponentiated gammas: %v", gds.gammas)
-	log.Printf("Received Exponentiated deltas: %v", gds.deltas)
+	log.Printf("Received Exponentiated gammas: %v", gds.Gammas)
+	log.Printf("Received Exponentiated deltas: %v", gds.Deltas)
 
 	go func() {
-		exponentiatedGammasDeltas <- &gds
+		exponentiatedGammasDeltasChan <- &gds
 	}()
-
 	return &google_protobuf.Empty{}, nil
 }
 
@@ -419,11 +425,11 @@ func (s *state) millionaire_AlphaBetaDistribute() {
 
 func (s *state) millionaire_MixOutput1() {
 	// mostly a no-op just calculate (gamma, delta)
-	gds := millionaireCalculateGammaDelta(s.myAlphasBetas.alphas, s.theirAlphasBetas.alphas,
+	gds := millionaire.MillionaireCalculateGammaDelta(s.myAlphasBetas.alphas, s.theirAlphasBetas.alphas,
 		s.myAlphasBetas.betas, s.theirAlphasBetas.betas, *zkp.Y_Mill, *zkp.P)
 	// TODO for now just set both
 	s.myGammasDeltas = gds
-	s.theirAlphasBetas = gds
+	s.theirGammasDeltas = gds
 }
 
 func (s *state) millionaire_MixOutput2() {
@@ -434,35 +440,44 @@ func (s *state) millionaire_MixOutput2() {
 func (s *state) millionaire_RandomizeOutput() {
 	log.Println("Beginning random exponentiation")
 
-	var proofs []pb.DiscreteLogEquality
+	var proofs []*pb.DiscreteLogEquality
+
+	var gammas, deltas [][]byte
 
 	// compute exponentiated gamma and delta
 	// TODO for now myGammasDeltas
-	for i := 0; i < len(s.myGammasDeltas.gammas); i++ {
+	for i := 0; i < len(s.myGammasDeltas.Gammas); i++ {
+		// for the protobuf struct
+		gammas = append(gammas, s.myGammasDeltas.Gammas[i].Bytes())
+		deltas = append(deltas, s.myGammasDeltas.Deltas[i].Bytes())
+
 		// this is our random exponent
 		var m big.Int
 		m.Rand(zkp.RandGen, zkp.Q)
 
 		var newGamma, newDelta big.Int
-		newGamma.Exp(&s.myGammasDeltas.gammas[i], &m, zkp.P)
-		newDelta.Exp(&s.myGammasDeltas.deltas[i], &m, zkp.P)
+		newGamma.Exp(&s.myGammasDeltas.Gammas[i], &m, zkp.P)
+		newDelta.Exp(&s.myGammasDeltas.Deltas[i], &m, zkp.P)
 
-		s.myExponentiatedGammasDeltas.gammas = append(
-			s.myExponentiatedGammasDeltas.gammas, newGamma)
+		s.myExponentiatedGammasDeltas.Gammas = append(
+			s.myExponentiatedGammasDeltas.Gammas, newGamma)
 
-		s.myExponentiatedGammasDeltas.deltas = append(
-			s.myExponentiatedGammasDeltas.deltas, newDelta)
+		s.myExponentiatedGammasDeltas.Deltas = append(
+			s.myExponentiatedGammasDeltas.Deltas, newDelta)
 
+		// to pass the bases to the zkp generator
 		var gs []big.Int
-		gs = append(gs, s.myGammasDeltas.gammas[i])
-		gs = append(gs, s.myGammasDeltas.deltas[i])
+		gs = append(gs, s.myGammasDeltas.Gammas[i])
+		gs = append(gs, s.myGammasDeltas.Deltas[i])
 
 		// create proof and add it to proof list
 		ts, r := zkp.DiscreteLogEquality(m, gs, *zkp.P, *zkp.Q)
 		var proof pb.DiscreteLogEquality
-		proof.ts = ts
-		proof.r = r
-		proofs = append(proofs, proof)
+		for _, t := range ts {
+			proof.Ts = append(proof.Ts, t.Bytes())
+		}
+		proof.R = r.Bytes()
+		proofs = append(proofs, &proof)
 	}
 
 	// Publish public key to all clients
@@ -472,8 +487,8 @@ func (s *state) millionaire_RandomizeOutput() {
 			// Needs to be a goroutine because otherwise we block waiting for a response
 			_, err := client.MillionaireRandomizeOutput(context.Background(),
 				&pb.RandomizedOutput{
-					Gammas: s.myExponentiatedGammasDeltas.gammas,
-					Deltas: s.myExponentiatedGammasDeltas.deltas,
+					Gammas: gammas,
+					Deltas: deltas,
 					Proofs: proofs,
 				})
 			if err != nil {
@@ -482,19 +497,12 @@ func (s *state) millionaire_RandomizeOutput() {
 		}()
 	}
 
-	// Wait for gammas/deltas of all other clients
+	// Wait for gammas/deltas of all other clients (should be just 1 for millionaire)
 	// TODO error handling
 	for i := 0; i < len(clients); i++ {
-		s.theirExponentiatedGammasDelta = append(s.theirExponentiatedGammasDelta, <-expentiatedGammasDeltasChan)
+		s.theirExponentiatedGammasDelta = <-exponentiatedGammasDeltasChan
 	}
 
-	log.Printf("Keys: %v", s.keys)
-
-	// Calculating final public key
-	// TODO SHOULD THIS BE MOD P? Probably doesn't matter, but just for computational practicality
-	s.publicKey.Set(zkp.One)
-	for _, key := range s.keys {
-		s.publicKey.Mul(&s.publicKey, &key)
-	}
-	s.publicKey.Mod(&s.publicKey, zkp.P)
+	log.Printf("Received exponentiated gammas/deltas %v", s.theirExponentiatedGammasDelta)
+	// TODO calcualte the final shit
 }

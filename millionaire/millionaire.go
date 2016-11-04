@@ -7,7 +7,7 @@ import (
 )
 
 type GammaDeltaStruct struct {
-	gammas, deltas []big.Int
+	Gammas, Deltas []big.Int
 }
 
 // Computes PI_{d=j+1}^{k} (a1_d/a2_d)^2^d-2
@@ -36,7 +36,7 @@ func multiplyDivideExponentiate(a1 []big.Int, a2 []big.Int, j int, p big.Int) bi
 }
 
 // Whoever calls this function: make sure you understand what bigY means.
-func millionaireCalculateGammaDelta(alpha_1 []big.Int, alpha_2 []big.Int,
+func MillionaireCalculateGammaDelta(alpha_1 []big.Int, alpha_2 []big.Int,
 	beta_1 []big.Int, beta_2 []big.Int, bigY big.Int, p big.Int) *GammaDeltaStruct {
 	var gds GammaDeltaStruct
 	var gammaJ, deltaJ big.Int
@@ -64,8 +64,8 @@ func millionaireCalculateGammaDelta(alpha_1 []big.Int, alpha_2 []big.Int,
 		deltaJ.Mul(&temp, &deltaJ)
 		deltaJ.Mod(&deltaJ, &p)
 
-		gds.gammas = append(gds.gammas, gammaJ)
-		gds.deltas = append(gds.deltas, deltaJ)
+		gds.Gammas = append(gds.Gammas, gammaJ)
+		gds.Deltas = append(gds.Deltas, deltaJ)
 	}
 
 	return &gds
