@@ -41,6 +41,7 @@ message MixedOutput {
   VerifiableShuffle proof = 3;
 }
 
+// TODO millionaire specific
 message RandomizedOuput {
   repeated bytes gammas = 1;
   repeated bytes deltas = 2;
@@ -69,6 +70,6 @@ message VerifiableShuffle {
 }
 
 message DiscreteLogEquality {
-  repeated bytes t = 1;
+  repeated bytes ts = 1;
   bytes r = 2;
 }

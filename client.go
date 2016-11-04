@@ -40,13 +40,15 @@ type state struct {
 	publicKey    big.Int
 
 	// TODO millionaire specific
-	myAlphasBetas     *AlphaBetaStruct
-	theirAlphasBetas  *AlphaBetaStruct
-	myGammasDeltas    *GammaDeltaStruct
-	theirGammasDeltas *GammaDeltaStruct
+	myAlphasBetas                 *AlphaBetaStruct
+	theirAlphasBetas              *AlphaBetaStruct
+	myGammasDeltas                *millionaire.GammaDeltaStruct
+	theirGammasDeltas             *millionaire.GammaDeltaStruct
+	myExponentiatedGammasDeltas   *millionaire.GammaDeltaStruct
+	theirExponentiatedGammasDelta *millionaire.GammaDeltaStruct
 }
 
-// TODO don't be such a compelte piece of shit
+// TODO don't be such a complete piece of shit
 var myState *state
 
 // channels for each round
@@ -59,7 +61,8 @@ var (
 	keyChan chan big.Int = make(chan big.Int) // TODO bother with buffer?
 
 	// TODO millionaire specific
-	alphaBetaChan chan *AlphaBetaStruct = make(chan *AlphaBetaStruct)
+	alphaBetaChan             chan *AlphaBetaStruct  = make(chan *AlphaBetaStruct)
+	exponentiatedGammasDeltas chan *GammaDeltaStruct = make(chan *GammaDeltaStruct)
 )
 
 // TODO millionaire specific
@@ -142,11 +145,51 @@ func (s *server) MillionaireAlphaBeta(ctx context.Context, in *pb.AlphaBeta) (*g
 	return &google_protobuf.Empty{}, nil
 }
 
-func (s *server) MillionaireGammaDelta1(ctx context.Context, in *pb.Key) (*google_protobuf.Empty, error) {
+func (s *server) MillionaireGammaDelta1(ctx context.Context, in *pb.MixedOuput) (*google_protobuf.Empty, error) {
 }
-func (s *server) MillionaireGammaDelta2(ctx context.Context, in *pb.Key) (*google_protobuf.Empty, error) {
+func (s *server) MillionaireGammaDelta2(ctx context.Context, in *pb.MixedOuput) (*google_protobuf.Empty, error) {
 }
-func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.Key) (*google_protobuf.Empty, error) {
+func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.RandomizedOutput) (*google_protobuf.Empty, error) {
+	if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != zkp.K_Mill {
+		log.Fatalf("Incorrect number of shit4")
+	}
+
+	var gds GammaDeltaStruct
+
+	for i := 0; i < len(in.Gammas); i++ {
+		var bases, results, ts []big.Int
+		// TODO myGammasDeltas for now
+		bases = append(bases, s.myGammasDeltas.gammas[i])
+		bases = append(bases, s.myGammasDeltas.deltas[i])
+		results = append(results, in.Gammas[i])
+		reuslts = append(reuslts, in.Deltas[i])
+
+		// set proof values
+		var r big.Int
+		r.SetBytes(in.Proofs.R)
+		for _, t := range in.Proofs.Ts {
+			var t_temp big.Int
+			t_temp.SetBytes(t)
+			ts = append(ts, t_temp)
+		}
+
+		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+			log.Fatalf("Received incorrect zero-knowledge proof for exponentiated gammas/deltas")
+		}
+		// TODO change to pass protobuf structs
+		gds.gammas = append(gds.gammas, gamma)
+		gds.deltas = append(gds.deltas, delta)
+	}
+
+	// TODO debugging
+	log.Printf("Received Exponentiated gammas: %v", gds.gammas)
+	log.Printf("Received Exponentiated deltas: %v", gds.deltas)
+
+	go func() {
+		exponentiatedGammasDeltas <- &gds
+	}()
+
+	return &google_protobuf.Empty{}, nil
 }
 
 // Listens for connections; meant to be run in a goroutine
@@ -216,6 +259,8 @@ func main() {
 	// TODO millionaire specific shit
 	myState.millionaire_AlphaBetaDistribute()
 	myState.millionaire_MixOutput1()
+	myState.millionaire_MixOutput2()
+	myState.millionaire_RandomizeOutput()
 
 	// TODO do this better
 	for {
@@ -373,5 +418,83 @@ func (s *state) millionaire_AlphaBetaDistribute() {
 }
 
 func (s *state) millionaire_MixOutput1() {
+	// mostly a no-op just calculate (gamma, delta)
+	gds := millionaireCalculateGammaDelta(s.myAlphasBetas.alphas, s.theirAlphasBetas.alphas,
+		s.myAlphasBetas.betas, s.theirAlphasBetas.betas, *zkp.Y_Mill, *zkp.P)
+	// TODO for now just set both
+	s.myGammasDeltas = gds
+	s.theirAlphasBetas = gds
+}
 
+func (s *state) millionaire_MixOutput2() {
+	// no-op for now
+}
+
+// Takes gamme and delta to a random exponent, proves the equality of the exponent (logarithm)
+func (s *state) millionaire_RandomizeOutput() {
+	log.Println("Beginning random exponentiation")
+
+	var proofs []pb.DiscreteLogEquality
+
+	// compute exponentiated gamma and delta
+	// TODO for now myGammasDeltas
+	for i := 0; i < len(s.myGammasDeltas.gammas); i++ {
+		// this is our random exponent
+		var m big.Int
+		m.Rand(zkp.RandGen, zkp.Q)
+
+		var newGamma, newDelta big.Int
+		newGamma.Exp(&s.myGammasDeltas.gammas[i], &m, zkp.P)
+		newDelta.Exp(&s.myGammasDeltas.deltas[i], &m, zkp.P)
+
+		s.myExponentiatedGammasDeltas.gammas = append(
+			s.myExponentiatedGammasDeltas.gammas, newGamma)
+
+		s.myExponentiatedGammasDeltas.deltas = append(
+			s.myExponentiatedGammasDeltas.deltas, newDelta)
+
+		var gs []big.Int
+		gs = append(gs, s.myGammasDeltas.gammas[i])
+		gs = append(gs, s.myGammasDeltas.deltas[i])
+
+		// create proof and add it to proof list
+		ts, r := zkp.DiscreteLogEquality(m, gs, *zkp.P, *zkp.Q)
+		var proof pb.DiscreteLogEquality
+		proof.ts = ts
+		proof.r = r
+		proofs = append(proofs, proof)
+	}
+
+	// Publish public key to all clients
+	for _, client := range clients {
+		log.Println("Sending exponentiated gammas/deltas...")
+		go func() {
+			// Needs to be a goroutine because otherwise we block waiting for a response
+			_, err := client.MillionaireRandomizeOutput(context.Background(),
+				&pb.RandomizedOutput{
+					Gammas: s.myExponentiatedGammasDeltas.gammas,
+					Deltas: s.myExponentiatedGammasDeltas.deltas,
+					Proofs: proofs,
+				})
+			if err != nil {
+				log.Fatalf("Error on sending exponentiated gammas/deltas: %v", err)
+			}
+		}()
+	}
+
+	// Wait for gammas/deltas of all other clients
+	// TODO error handling
+	for i := 0; i < len(clients); i++ {
+		s.theirExponentiatedGammasDelta = append(s.theirExponentiatedGammasDelta, <-expentiatedGammasDeltasChan)
+	}
+
+	log.Printf("Keys: %v", s.keys)
+
+	// Calculating final public key
+	// TODO SHOULD THIS BE MOD P? Probably doesn't matter, but just for computational practicality
+	s.publicKey.Set(zkp.One)
+	for _, key := range s.keys {
+		s.publicKey.Mul(&s.publicKey, &key)
+	}
+	s.publicKey.Mod(&s.publicKey, zkp.P)
 }
