@@ -15,6 +15,7 @@ service ZKPAuction {
   rpc MillionaireGammaDelta1 (MixedOutput) returns (google.protobuf.Empty) {}
   rpc MillionaireGammaDelta2 (MixedOutput) returns (google.protobuf.Empty) {}
   rpc MillionaireRandomizeOutput (RandomizedOutput) returns (google.protobuf.Empty) {}
+  rpc MillionaireDecryptionInfo (DecryptionInfo) returns (google.protobuf.Empty) {}
 }
 
 // The request message containing the user's name.
@@ -47,6 +48,13 @@ message RandomizedOutput {
   repeated bytes deltas = 2;
 
   repeated DiscreteLogEquality proofs = 3;
+}
+
+// TODO millionaire specific
+message DecryptionInfo {
+  repeated bytes phis = 1;
+
+  repeated DiscreteLogEquality proofs = 2;
 }
 
 message DiscreteLogKnowledge {

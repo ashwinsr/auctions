@@ -47,6 +47,9 @@ type state struct {
 	theirGammasDeltas             *millionaire.GammaDeltaStruct
 	myExponentiatedGammasDeltas   *millionaire.GammaDeltaStruct
 	theirExponentiatedGammasDelta *millionaire.GammaDeltaStruct
+	phisBeforeExponentiation      *millionaire.PhiStruct
+	myPhis                        *millionaire.PhiStruct
+	theirPhis                     *millionaire.PhiStruct
 }
 
 // TODO don't be such a complete piece of shit
@@ -64,6 +67,7 @@ var (
 	// TODO millionaire specific
 	alphaBetaChan                 chan *AlphaBetaStruct              = make(chan *AlphaBetaStruct)
 	exponentiatedGammasDeltasChan chan *millionaire.GammaDeltaStruct = make(chan *millionaire.GammaDeltaStruct)
+	phiChan                       chan *millionaire.PhiStruct        = make(chan *millionaire.PhiStruct)
 )
 
 // TODO millionaire specific
@@ -159,25 +163,25 @@ func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.Randomiz
 
 	var gds millionaire.GammaDeltaStruct
 
-	for i := 0; i < len(in.Gammas); i++ {
+	for j := 0; j < len(in.Gammas); j++ {
 		var gamma, delta big.Int
-		gamma.SetBytes(in.Gammas[i])
-		delta.SetBytes(in.Deltas[i])
+		gamma.SetBytes(in.Gammas[j])
+		delta.SetBytes(in.Deltas[j])
 
 		gds.Gammas = append(gds.Gammas, gamma)
 		gds.Deltas = append(gds.Deltas, delta)
 
 		var bases, results, ts []big.Int
 		// TODO myGammasDeltas for now
-		bases = append(bases, myState.myGammasDeltas.Gammas[i])
-		bases = append(bases, myState.myGammasDeltas.Deltas[i])
+		bases = append(bases, myState.myGammasDeltas.Gammas[j])
+		bases = append(bases, myState.myGammasDeltas.Deltas[j])
 		results = append(results, gamma)
 		results = append(results, delta)
 
 		// set proof values
 		var r big.Int
-		r.SetBytes(in.Proofs[i].R)
-		for _, t := range in.Proofs[i].Ts {
+		r.SetBytes(in.Proofs[j].R)
+		for _, t := range in.Proofs[j].Ts {
 			var t_temp big.Int
 			t_temp.SetBytes(t)
 			ts = append(ts, t_temp)
@@ -195,6 +199,50 @@ func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.Randomiz
 
 	go func() {
 		exponentiatedGammasDeltasChan <- &gds
+	}()
+	return &google_protobuf.Empty{}, nil
+}
+
+func (s *server) MillionaireDecryptionInfo(ctx context.Context, in *pb.DecryptionInfo) (*google_protobuf.Empty, error) {
+	if len(in.Phis) != len(in.Proofs) || uint(len(in.Proofs)) != zkp.K_Mill {
+		log.Fatalf("Incorrect number of shit5")
+	}
+
+	var phis millionaire.PhiStruct
+
+	for j := 0; j < len(in.Phis); j++ {
+		var phi big.Int
+		phi.SetBytes(in.Phis[j])
+
+		phis.Phis = append(phis.Phis, phis)
+
+		var bases, results, ts []big.Int
+		// proof equality of logarithms of the received phi and their public key
+		bases = append(bases, myState.myPhisBeforeExponentiation.Phis[i])
+		bases = append(bases, *zkp.G)
+		results = append(results, phi)
+		results = append(results, myState.keys[1]) // their public key
+
+		// set proof values
+		var r big.Int
+		r.SetBytes(in.Proofs[j].R)
+		for _, t := range in.Proofs[j].Ts {
+			var t_temp big.Int
+			t_temp.SetBytes(t)
+			ts = append(ts, t_temp)
+		}
+
+		log.Printf("Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
+		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+			log.Fatalf("Received incorrect zero-knowledge proof for phis")
+		}
+	}
+
+	// TODO debugging
+	log.Printf("Received Phis: %v")
+
+	go func() {
+		phiChan <- &phis
 	}()
 	return &google_protobuf.Empty{}, nil
 }
@@ -523,4 +571,75 @@ func (s *state) millionaire_RandomizeOutput() {
 
 	log.Printf("Received exponentiated gammas/deltas %v", s.theirExponentiatedGammasDelta)
 	// TODO calcualte the final shit
+}
+
+// Calculates phis in order to decrypt them
+func (s *state) millionaire_Decryption() {
+	log.Println("Beginning decryption")
+
+	var proofs []*pb.DiscreteLogEquality
+
+	var phis [][]byte
+
+	s.myPhis = new(millionaire.PhisStruct)
+	s.phisBeforeExponentiation = new(millionaire.PhiStruct)
+
+	// compute exponentiated gamma and delta
+	// TODO for now myGammasDeltas
+	for i := 0; i < len(s.myPhis.Phis); i++ {
+		// calculate phi
+		var phi, phi2 big.Int
+		phi.Mul(s.myExponentiatedGammasDeltas.Deltas[i], s.theirExponentiatedGammasDelta.Deltas[i])
+		phi.Mod(&phi, zkp.P)
+		// before exponentiating, add it to our list for checking the ZKP
+		phi2.Set(phi)
+		s.phisBeforeExponentiation.Phis = append(s.phisBeforeExponentiation.Phis, phi2)
+		phi.Exp(&phi, &s.myPrivateKey, zkp.P)
+		s.myPhis.Phis = append(s.phisBeforeExponentiation.Phis, phi)
+
+		// for the protobuf struct
+		phis = append(phis, phi.Bytes())
+
+		// to pass the bases to the zkp generator
+		var gs []big.Int
+		gs = append(gs, s.phi2)
+		gs = append(gs, *zkp.G)
+
+		// create proof and add it to proof list
+		ts, r := zkp.DiscreteLogEquality(s.myPrivateKey, gs, *zkp.P, *zkp.Q)
+		log.Printf("Creating proof.\nBases=%v\nExponent=%v\nTs=%vn,R=%v\n", gs, m, ts, r)
+
+		var proof pb.DiscreteLogEquality
+		for _, t := range ts {
+			proof.Ts = append(proof.Ts, t.Bytes())
+		}
+
+		proof.R = r.Bytes()
+		proofs = append(proofs, &proof)
+	}
+
+	// Publish public key to all clients
+	for _, client := range clients {
+		log.Println("Sending exponentiated phis...")
+		go func() {
+			// Needs to be a goroutine because otherwise we block waiting for a response
+			_, err := client.MillionaireDecryptInfo(context.Background(),
+				&pb.DecryptInfo{
+					Phis:   phis,
+					Proofs: proofs,
+				})
+			if err != nil {
+				log.Fatalf("Error on sending phis: %v", err)
+			}
+		}()
+	}
+
+	// Wait for gammas/deltas of all other clients (should be just 1 for millionaire)
+	// TODO error handling
+	for i := 0; i < len(clients); i++ {
+		s.theirPhis = <-phiChan
+	}
+
+	log.Printf("Received phis %v", s.theirPhis)
+	// TODO calcualte the final shit (division + which one is bigger)
 }

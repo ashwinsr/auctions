@@ -6,6 +6,10 @@ import (
 	"github.com/ashwinsr/auctions/zkp"
 )
 
+type PhiStruct struct {
+	Phis []big.Int
+}
+
 type GammaDeltaStruct struct {
 	Gammas, Deltas []big.Int
 }
