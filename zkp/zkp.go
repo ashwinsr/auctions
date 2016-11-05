@@ -6,6 +6,58 @@ import (
 	"math/big"
 )
 
+type Ciphertext struct {
+	alpha big.Int
+	beta  big.Int
+}
+
+type Permutation struct {
+	forward  []big.Int
+	backward []big.Int
+}
+
+func SecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, p big.Int, q big.Int, pi Permutation, R []big.Int) {
+	var n, rd, rD, sd, sD, delta, RR, c big.Int
+	n = len(e)
+
+	var d, r, D []big.Int
+	d = make(big.Int, n)
+	r = make(big.Int, n)
+	D = make(big.Int, n)
+
+	for i := 0; i < n; i++ {
+		d[i].Mul(&Lt, &Ls)
+		d[i].Rand(RandGen, &d[i])
+		r[i].Rand(RandGen, &q)
+		D[i].Rand(RandGen, &q)
+	}
+
+	rd.Rand(RandGen, &q)
+	rD.Rand(RandGen, &q)
+	sd.Rand(RandGen, &q)
+	sD.Rand(RandGen, &q)
+
+	delta.Rand(RandGen, &q)
+
+	RR.Rand(RandGen, &q) // TODO: Look at this later
+
+	var ER Ciphertext
+	ER.alpha.Exp(&y, &RR, &p) // This is the encryption E(1; R_R)
+	ER.beta.Exp(&g, &RR, &p)
+
+	for i := 0; i < n; i++ {
+		var temp big.Int
+		temp.Exp(&E[i].alpha, &D[i], &p)
+		ER.alpha.Mul(&ER.alpha, &temp)
+		ER.alpha.Mod(&ER.alpha, &p)
+
+		temp.Exp(&E[i].beta, &D[i], &p)
+		ER.beta.Mul(&ER.beta, &temp)
+		ER.alpha.Mod(&ER.alpha, &p)
+	}
+
+}
+
 /*
  * Variable names follow THIS WIKIPEDIA ARTICLE:
  * https://en.wikipedia.org/wiki/Fiat%E2%80%93Shamir_heuristic

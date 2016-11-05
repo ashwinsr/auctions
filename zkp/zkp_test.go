@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+func ReEncryptElGamal(alpha big.Int, beta big.Int, R big.Int y big.Int) (alpha big.Int, beta big.Int) {
+	var alphaZero, betaZero big.Int
+  
+}
+
 func TestDiscreteLogKnowledge(test *testing.T) {
 	for i := 0; i < NumTests; i++ {
 		var x, y big.Int
