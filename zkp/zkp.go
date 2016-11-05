@@ -12,21 +12,26 @@ type Ciphertext struct {
 }
 
 type Permutation struct {
-	forward  []big.Int
-	backward []big.Int
+	forward  []int
+	backward []int
 }
 
-func SecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, p big.Int, q big.Int, pi Permutation, R []big.Int) {
-	var n, rd, rD, sd, sD, delta, RR, c big.Int
+func SecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.Int, p big.Int, q big.Int, pi Permutation, R []big.Int) {
+	var rd, rD, sd, sD, delta, RR big.Int
+	var n int
 	n = len(e)
 
-	var d, r, D []big.Int
-	d = make(big.Int, n)
-	r = make(big.Int, n)
-	D = make(big.Int, n)
+	var d, r, D, cd, cD []big.Int
+	d = make([]big.Int, n)
+	r = make([]big.Int, n)
+	D = make([]big.Int, n)
+
+	var c [][]big.Int
+	c = make([][]big.Int, n)
+
 
 	for i := 0; i < n; i++ {
-		d[i].Mul(&Lt, &Ls)
+		d[i].Mul(Lt, Ls)
 		d[i].Rand(RandGen, &d[i])
 		r[i].Rand(RandGen, &q)
 		D[i].Rand(RandGen, &q)
@@ -45,6 +50,13 @@ func SecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, p big.Int, q big.I
 	ER.alpha.Exp(&y, &RR, &p) // This is the encryption E(1; R_R)
 	ER.beta.Exp(&g, &RR, &p)
 
+	var SumDICubed big.Int
+
+	SumDICubed.Add(Zero, Zero)
+
+	cd = make([]big.Int, n + 3)
+	cD = make([]big.Int, n + 3)
+
 	for i := 0; i < n; i++ {
 		var temp big.Int
 		temp.Exp(&E[i].alpha, &D[i], &p)
@@ -54,6 +66,61 @@ func SecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, p big.Int, q big.I
 		temp.Exp(&E[i].beta, &D[i], &p)
 		ER.beta.Mul(&ER.beta, &temp)
 		ER.alpha.Mod(&ER.alpha, &p)
+
+		
+		c[i] = make([]big.Int, n + 3)
+		
+		// Begin setting up of c_i's
+		inverse := pi.backward[i]
+
+		c[i][inverse].Sub(One, Zero);
+
+		c[i][n].Mul(Three, &d[inverse])
+		c[i][n].Mod(&c[i][n], &p)
+
+		c[i][n + 1].Mul(&c[i][n], &d[inverse])
+		c[i][n + 1].Mod(&c[i][n + 1], &p)
+
+		c[i][n + 2] = r[i]
+		// Done makeing c_i's
+
+		// Assigning d_i and D_i to c_d and c_D respectiveky
+		cd[i] = d[i]
+		cD[i] = D[i]
+
+		// Finding sum of d_j^3, which is a term in c_d
+		var dICubed big.Int
+		dICubed.Mul(&d[i], &d[i])
+		dICubed.Mul(&dICubed, &d[i])
+		dICubed.Mod(&dICubed, &p)
+		SumDICubed.Add(&SumDICubed, &dICubed)
+	}
+
+	cd[n] = sd
+	cD[n] = delta
+
+	cd[n + 1].Sub(&SumDICubed, &delta)
+	cd[n + 1].Mod(&cd[n + 1], &p)
+	cD[n + 1] = sD
+
+	cd[n + 2] = rd
+	cD[n + 2] = rD
+
+	// Done doing the initial stage
+
+	// Computing t_1, ... , t_n challenge for Fiat-Shamir approach
+	h := sha256.New()
+
+	var t []big.Int
+	t = make([]big.Int, n)
+	
+	for i := 0; i < n; i++ {
+		for j := 0; j < n + 3; i++ {
+			h.Write(c[i][j].Bytes()[:])	
+		}
+		t[i].SetBytes(h.Sum(nil))
+		t[i].Mod(&t[i], Lt)
+		h.Reset()
 	}
 
 }

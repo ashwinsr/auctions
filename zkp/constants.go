@@ -13,7 +13,9 @@ var P = big.NewInt(34531109)
 var Q = big.NewInt(8632777)
 var G = big.NewInt(19044154)
 
+var Zero = big.NewInt(0)
 var One = big.NewInt(1)
+var Three = big.NewInt(3)
 var FortyTwo = big.NewInt(42)
 
 var Lt = big.NewInt(1024)
