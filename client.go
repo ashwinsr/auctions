@@ -183,6 +183,7 @@ func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.Randomiz
 			ts = append(ts, t_temp)
 		}
 
+		log.Printf("Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
 		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
 			log.Fatalf("Received incorrect zero-knowledge proof for exponentiated gammas/deltas")
 		}
@@ -444,9 +445,13 @@ func (s *state) millionaire_RandomizeOutput() {
 
 	var gammas, deltas [][]byte
 
+	s.myExponentiatedGammasDeltas = new(millionaire.GammaDeltaStruct)
+
 	// compute exponentiated gamma and delta
 	// TODO for now myGammasDeltas
 	for i := 0; i < len(s.myGammasDeltas.Gammas); i++ {
+		log.Println("Beginning random exponentiation2")
+
 		// for the protobuf struct
 		gammas = append(gammas, s.myGammasDeltas.Gammas[i].Bytes())
 		deltas = append(deltas, s.myGammasDeltas.Deltas[i].Bytes())
@@ -458,6 +463,7 @@ func (s *state) millionaire_RandomizeOutput() {
 		var newGamma, newDelta big.Int
 		newGamma.Exp(&s.myGammasDeltas.Gammas[i], &m, zkp.P)
 		newDelta.Exp(&s.myGammasDeltas.Deltas[i], &m, zkp.P)
+		log.Println("Beginning random exponentiation3")
 
 		s.myExponentiatedGammasDeltas.Gammas = append(
 			s.myExponentiatedGammasDeltas.Gammas, newGamma)
@@ -469,15 +475,23 @@ func (s *state) millionaire_RandomizeOutput() {
 		var gs []big.Int
 		gs = append(gs, s.myGammasDeltas.Gammas[i])
 		gs = append(gs, s.myGammasDeltas.Deltas[i])
+		log.Println("Beginning random exponentiation4")
 
 		// create proof and add it to proof list
 		ts, r := zkp.DiscreteLogEquality(m, gs, *zkp.P, *zkp.Q)
+		log.Printf("Creating proof.\nBases=%v\nExponent=%v\nTs=%vn,R=%v\n", gs, m, ts, r)
+
+		log.Println("Beginning random exponentiation5")
 		var proof pb.DiscreteLogEquality
 		for _, t := range ts {
 			proof.Ts = append(proof.Ts, t.Bytes())
 		}
+
+		log.Println("Beginning random exponentiation6")
 		proof.R = r.Bytes()
 		proofs = append(proofs, &proof)
+
+		log.Println("Beginning random exponentiation7")
 	}
 
 	// Publish public key to all clients
@@ -497,11 +511,15 @@ func (s *state) millionaire_RandomizeOutput() {
 		}()
 	}
 
+	log.Println("Beginning random exponentiation8")
+
 	// Wait for gammas/deltas of all other clients (should be just 1 for millionaire)
 	// TODO error handling
 	for i := 0; i < len(clients); i++ {
 		s.theirExponentiatedGammasDelta = <-exponentiatedGammasDeltasChan
 	}
+
+	log.Println("Beginning random exponentiation9")
 
 	log.Printf("Received exponentiated gammas/deltas %v", s.theirExponentiatedGammasDelta)
 	// TODO calcualte the final shit
