@@ -1,3 +1,4 @@
+
 package main
 
 import (
@@ -214,11 +215,11 @@ func (s *server) MillionaireDecryptionInfo(ctx context.Context, in *pb.Decryptio
 		var phi big.Int
 		phi.SetBytes(in.Phis[j])
 
-		phis.Phis = append(phis.Phis, phis)
+		phis.Phis = append(phis.Phis, phi)
 
 		var bases, results, ts []big.Int
 		// proof equality of logarithms of the received phi and their public key
-		bases = append(bases, myState.myPhisBeforeExponentiation.Phis[i])
+		bases = append(bases, myState.phisBeforeExponentiation.Phis[j])
 		bases = append(bases, *zkp.G)
 		results = append(results, phi)
 		results = append(results, myState.keys[1]) // their public key
@@ -581,7 +582,7 @@ func (s *state) millionaire_Decryption() {
 
 	var phis [][]byte
 
-	s.myPhis = new(millionaire.PhisStruct)
+	s.myPhis = new(millionaire.PhiStruct)
 	s.phisBeforeExponentiation = new(millionaire.PhiStruct)
 
 	// compute exponentiated gamma and delta
@@ -589,25 +590,25 @@ func (s *state) millionaire_Decryption() {
 	for i := 0; i < len(s.myPhis.Phis); i++ {
 		// calculate phi
 		var phi, phi2 big.Int
-		phi.Mul(s.myExponentiatedGammasDeltas.Deltas[i], s.theirExponentiatedGammasDelta.Deltas[i])
+		phi.Mul(&s.myExponentiatedGammasDeltas.Deltas[i], &s.theirExponentiatedGammasDelta.Deltas[i])
 		phi.Mod(&phi, zkp.P)
 		// before exponentiating, add it to our list for checking the ZKP
-		phi2.Set(phi)
+		phi2.Set(&phi)
 		s.phisBeforeExponentiation.Phis = append(s.phisBeforeExponentiation.Phis, phi2)
 		phi.Exp(&phi, &s.myPrivateKey, zkp.P)
-		s.myPhis.Phis = append(s.phisBeforeExponentiation.Phis, phi)
+		s.myPhis.Phis = append(s.myPhis.Phis, phi)
 
 		// for the protobuf struct
 		phis = append(phis, phi.Bytes())
 
 		// to pass the bases to the zkp generator
 		var gs []big.Int
-		gs = append(gs, s.phi2)
+		gs = append(gs, phi2)
 		gs = append(gs, *zkp.G)
 
 		// create proof and add it to proof list
 		ts, r := zkp.DiscreteLogEquality(s.myPrivateKey, gs, *zkp.P, *zkp.Q)
-		log.Printf("Creating proof.\nBases=%v\nExponent=%v\nTs=%vn,R=%v\n", gs, m, ts, r)
+		log.Printf("Creating proof.\nBases=%v\nExponent=%v\nTs=%vn,R=%v\n", gs, s.myPrivateKey, ts, r)
 
 		var proof pb.DiscreteLogEquality
 		for _, t := range ts {
@@ -623,8 +624,8 @@ func (s *state) millionaire_Decryption() {
 		log.Println("Sending exponentiated phis...")
 		go func() {
 			// Needs to be a goroutine because otherwise we block waiting for a response
-			_, err := client.MillionaireDecryptInfo(context.Background(),
-				&pb.DecryptInfo{
+			_, err := client.MillionaireDecryptionInfo(context.Background(),
+				&pb.DecryptionInfo{
 					Phis:   phis,
 					Proofs: proofs,
 				})
