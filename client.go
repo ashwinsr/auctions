@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -62,13 +61,17 @@ var myState *state
  * onto the next round, just wait in the channel until we are ready.
  */
 var (
-	clients []pb.ZKPAuctionClient
-	keyChan chan big.Int = make(chan big.Int) // TODO bother with buffer?
+	clients        []pb.ZKPAuctionClient
+	keyChan        chan big.Int = make(chan big.Int) // TODO bother with buffer?
+	canReceiveKeys chan struct{}
 
 	// TODO millionaire specific
-	alphaBetaChan                 chan *AlphaBetaStruct              = make(chan *AlphaBetaStruct)
+	alphaBetaChan                 chan *AlphaBetaStruct = make(chan *AlphaBetaStruct)
+	canReceiveAlphaBeta           chan struct{}
 	exponentiatedGammasDeltasChan chan *millionaire.GammaDeltaStruct = make(chan *millionaire.GammaDeltaStruct)
-	phiChan                       chan *millionaire.PhiStruct        = make(chan *millionaire.PhiStruct)
+	canReceiveGammasDeltas        chan struct{}
+	phiChan                       chan *millionaire.PhiStruct = make(chan *millionaire.PhiStruct)
+	canReceivePhis                chan struct{}
 )
 
 // TODO millionaire specific
@@ -89,20 +92,26 @@ type server struct{}
 
 // SendKey implements pb.ZKPAuctionServer
 func (s *server) SendKey(ctx context.Context, in *pb.Key) (*google_protobuf.Empty, error) {
-	var key, t, r big.Int
-	key.SetBytes(in.Key) // TODO this how you access Key? Or GetKey()
-	t.SetBytes(in.GetProof().T)
-	r.SetBytes(in.GetProof().R)
-
-	log.Printf("Received key: %v\n", key)
-
-	if err := zkp.CheckDiscreteLogKnowledgeProof(*zkp.G, key, t, r, *zkp.P, *zkp.Q); err != nil {
-		log.Fatalf("Received incorrect zero-knowledge proof. Key=%v, t=%v, r=%v", key, t, r)
-	}
-
-	// put key into keyChan in a goroutine, as we want to return as soon as possible
 	go func() {
+		log.Printf("Starting to receive, waiting on channel\n")
+		// wait until we can receive keys
+		<-canReceiveKeys
+
+		var key, t, r big.Int
+		key.SetBytes(in.Key) // TODO this how you access Key? Or GetKey()
+		t.SetBytes(in.GetProof().T)
+		r.SetBytes(in.GetProof().R)
+
+		log.Printf("Received key: %v\n", key)
+
+		if err := zkp.CheckDiscreteLogKnowledgeProof(*zkp.G, key, t, r, *zkp.P, *zkp.Q); err != nil {
+			log.Fatalf("Received incorrect zero-knowledge proof. Key=%v, t=%v, r=%v", key, t, r)
+		}
+
+		// put key into keyChan in a goroutine, as we want to return as soon as possible
+		// go func() {
 		keyChan <- key
+		// }()
 	}()
 
 	return &google_protobuf.Empty{}, nil
@@ -111,6 +120,9 @@ func (s *server) SendKey(ctx context.Context, in *pb.Key) (*google_protobuf.Empt
 // TODO millionaire specific
 // MillionaireAlphaBeta implements pb.ZKPAuctionServer
 func (s *server) MillionaireAlphaBeta(ctx context.Context, in *pb.AlphaBeta) (*google_protobuf.Empty, error) {
+	// wait until we can receive alphas and betas
+	<-canReceiveAlphaBeta
+
 	if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != zkp.K_Mill {
 		log.Fatalf("Incorrect number of shit")
 	}
@@ -158,6 +170,9 @@ func (s *server) MillionaireGammaDelta2(ctx context.Context, in *pb.MixedOutput)
 	return &google_protobuf.Empty{}, nil
 }
 func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.RandomizedOutput) (*google_protobuf.Empty, error) {
+	// wait until we can receive gammas and deltas
+	<-canReceiveGammasDeltas
+
 	if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != zkp.K_Mill {
 		log.Fatalf("Incorrect number of shit4")
 	}
@@ -205,6 +220,9 @@ func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.Randomiz
 }
 
 func (s *server) MillionaireDecryptionInfo(ctx context.Context, in *pb.DecryptionInfo) (*google_protobuf.Empty, error) {
+	// wait until we can receive phis
+	<-canReceivePhis
+
 	if len(in.Phis) != len(in.Proofs) || uint(len(in.Proofs)) != zkp.K_Mill {
 		log.Fatalf("Incorrect number of shit5")
 	}
@@ -295,6 +313,12 @@ func initClients(hosts []string, myAddr string) {
 		clients = append(clients, c)
 	}
 
+	// initialize channels with correct amount of buffer space
+	canReceiveKeys = make(chan struct{}, len(clients))
+	canReceiveAlphaBeta = make(chan struct{}, len(clients))
+	canReceiveGammasDeltas = make(chan struct{}, len(clients))
+	canReceivePhis = make(chan struct{}, len(clients))
+
 	log.Println("Finishing initializing clients")
 }
 
@@ -346,6 +370,11 @@ func (s *state) keyDistribution() {
 	// Create proto structure of zkp
 	zkpPrivKey := &pb.DiscreteLogKnowledge{T: t.Bytes(), R: r.Bytes()}
 	log.Printf("Sending t=%v, r=%v", t, r)
+
+	// Signal to all receivers that we can receive now
+	for i := 0; i < len(clients); i++ {
+		canReceiveKeys <- struct{}{}
+	}
 
 	// Publish public key to all clients
 	for _, client := range clients {
@@ -441,6 +470,11 @@ func (s *state) millionaire_AlphaBetaDistribute() {
 			R_1: r_1.Bytes(),
 			R_2: r_2.Bytes(),
 		})
+	}
+
+	// Signal to all receivers that we can receive now
+	for i := 0; i < len(clients); i++ {
+		canReceiveAlphaBeta <- struct{}{}
 	}
 
 	for _, client := range clients {
@@ -543,6 +577,11 @@ func (s *state) millionaire_RandomizeOutput() {
 		log.Println("Beginning random exponentiation7")
 	}
 
+	// Signal to all receivers that we can receive now
+	for i := 0; i < len(clients); i++ {
+		canReceiveGammasDeltas <- struct{}{}
+	}
+
 	// Publish public key to all clients
 	for _, client := range clients {
 		log.Println("Sending exponentiated gammas/deltas...")
@@ -617,6 +656,11 @@ func (s *state) millionaire_Decryption() {
 
 		proof.R = r.Bytes()
 		proofs = append(proofs, &proof)
+	}
+
+	// Signal to all receivers that we can receive now
+	for i := 0; i < len(clients); i++ {
+		canReceivePhis <- struct{}{}
 	}
 
 	// Publish public key to all clients
