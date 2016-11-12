@@ -704,7 +704,7 @@ func (s *state) millionaire_Decryption() {
 
 	// Publish public key to all clients
 	for _, client := range clients {
-		log.Println("Sending exponentiated phis...")
+		log.Println("Sending exponentiated phis... %v", s.myPhis.Phis)
 		go func() {
 			// Needs to be a goroutine because otherwise we block waiting for a response
 			_, err := client.MillionaireDecryptionInfo(context.Background(),
@@ -726,4 +726,5 @@ func (s *state) millionaire_Decryption() {
 
 	log.Printf("Received phis %v", s.theirPhis)
 	// TODO calcualte the final shit (division + which one is bigger)
+
 }
