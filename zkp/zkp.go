@@ -6,125 +6,6 @@ import (
 	"math/big"
 )
 
-type Ciphertext struct {
-	alpha big.Int
-	beta  big.Int
-}
-
-type Permutation struct {
-	forward  []int
-	backward []int
-}
-
-func SecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.Int, p big.Int, q big.Int, pi Permutation, R []big.Int) {
-	var rd, rD, sd, sD, delta, RR big.Int
-	var n int
-	n = len(e)
-
-	var d, r, D, cd, cD []big.Int
-	d = make([]big.Int, n)
-	r = make([]big.Int, n)
-	D = make([]big.Int, n)
-
-	var c [][]big.Int
-	c = make([][]big.Int, n)
-
-
-	for i := 0; i < n; i++ {
-		d[i].Mul(Lt, Ls)
-		d[i].Rand(RandGen, &d[i])
-		r[i].Rand(RandGen, &q)
-		D[i].Rand(RandGen, &q)
-	}
-
-	rd.Rand(RandGen, &q)
-	rD.Rand(RandGen, &q)
-	sd.Rand(RandGen, &q)
-	sD.Rand(RandGen, &q)
-
-	delta.Rand(RandGen, &q)
-
-	RR.Rand(RandGen, &q) // TODO: Look at this later
-
-	var ER Ciphertext
-	ER.alpha.Exp(&y, &RR, &p) // This is the encryption E(1; R_R)
-	ER.beta.Exp(&g, &RR, &p)
-
-	var SumDICubed big.Int
-
-	SumDICubed.Add(Zero, Zero)
-
-	cd = make([]big.Int, n + 3)
-	cD = make([]big.Int, n + 3)
-
-	for i := 0; i < n; i++ {
-		var temp big.Int
-		temp.Exp(&E[i].alpha, &D[i], &p)
-		ER.alpha.Mul(&ER.alpha, &temp)
-		ER.alpha.Mod(&ER.alpha, &p)
-
-		temp.Exp(&E[i].beta, &D[i], &p)
-		ER.beta.Mul(&ER.beta, &temp)
-		ER.alpha.Mod(&ER.alpha, &p)
-
-		
-		c[i] = make([]big.Int, n + 3)
-		
-		// Begin setting up of c_i's
-		inverse := pi.backward[i]
-
-		c[i][inverse].Sub(One, Zero);
-
-		c[i][n].Mul(Three, &d[inverse])
-		c[i][n].Mod(&c[i][n], &p)
-
-		c[i][n + 1].Mul(&c[i][n], &d[inverse])
-		c[i][n + 1].Mod(&c[i][n + 1], &p)
-
-		c[i][n + 2] = r[i]
-		// Done makeing c_i's
-
-		// Assigning d_i and D_i to c_d and c_D respectiveky
-		cd[i] = d[i]
-		cD[i] = D[i]
-
-		// Finding sum of d_j^3, which is a term in c_d
-		var dICubed big.Int
-		dICubed.Mul(&d[i], &d[i])
-		dICubed.Mul(&dICubed, &d[i])
-		dICubed.Mod(&dICubed, &p)
-		SumDICubed.Add(&SumDICubed, &dICubed)
-	}
-
-	cd[n] = sd
-	cD[n] = delta
-
-	cd[n + 1].Sub(&SumDICubed, &delta)
-	cd[n + 1].Mod(&cd[n + 1], &p)
-	cD[n + 1] = sD
-
-	cd[n + 2] = rd
-	cD[n + 2] = rD
-
-	// Done doing the initial stage
-
-	// Computing t_1, ... , t_n challenge for Fiat-Shamir approach
-	h := sha256.New()
-
-	var t []big.Int
-	t = make([]big.Int, n)
-	
-	for i := 0; i < n; i++ {
-		for j := 0; j < n + 3; i++ {
-			h.Write(c[i][j].Bytes()[:])	
-		}
-		t[i].SetBytes(h.Sum(nil))
-		t[i].Mod(&t[i], Lt)
-		h.Reset()
-	}
-
-}
-
 /*
  * Variable names follow THIS WIKIPEDIA ARTICLE:
  * https://en.wikipedia.org/wiki/Fiat%E2%80%93Shamir_heuristic
@@ -316,6 +197,179 @@ func EncryptedValueIsOneOfTwo(m big.Int, y big.Int, r big.Int, g big.Int, z big.
 	return a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2
 }
 
+func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.Int, p big.Int, q big.Int, pi Permutation, R []big.Int) (c [][]big.Int, cd []big.Int, cD []big.Int, ER Ciphertext, f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int, yD big.Int, zD big.Int, Z big.Int) {
+	var rd, rD, sd, sD, delta, RR big.Int
+	var n int
+	n = len(e)
+
+	var d, r, D []big.Int
+	d = make([]big.Int, n)
+	r = make([]big.Int, n)
+	D = make([]big.Int, n)
+
+	c = make([][]big.Int, n)
+
+
+	for i := 0; i < n; i++ {
+		d[i].Mul(Lt, Ls)
+		d[i].Rand(RandGen, &d[i])
+		r[i].Rand(RandGen, &q)
+		D[i].Rand(RandGen, &q)
+	}
+
+	rd.Rand(RandGen, &q)
+	rD.Rand(RandGen, &q)
+	sd.Rand(RandGen, &q)
+	sD.Rand(RandGen, &q)
+
+	delta.Rand(RandGen, &q)
+
+	RR.Rand(RandGen, &q) // TODO: Look at this later
+
+	ER.alpha.Exp(&y, &RR, &p) // This is the encryption E(1; R_R)
+	ER.beta.Exp(&g, &RR, &p)
+
+	var SumDICubed big.Int
+
+	SumDICubed.Add(Zero, Zero)
+
+	cd = make([]big.Int, n + 3)
+	cD = make([]big.Int, n + 3)
+
+	for i := 0; i < n; i++ {
+		var temp big.Int
+		temp.Exp(&E[i].alpha, &D[i], &p)
+		ER.alpha.Mul(&ER.alpha, &temp)
+		ER.alpha.Mod(&ER.alpha, &p)
+
+		temp.Exp(&E[i].beta, &D[i], &p)
+		ER.beta.Mul(&ER.beta, &temp)
+		ER.alpha.Mod(&ER.alpha, &p)
+
+		
+		c[i] = make([]big.Int, n + 3)
+		
+		// Begin setting up of c_i's
+		inverse := pi.backward[i]
+
+		c[i][inverse].Sub(One, Zero);
+
+		c[i][n].Mul(Three, &d[inverse])
+		c[i][n].Mod(&c[i][n], &p)
+
+		c[i][n + 1].Mul(&c[i][n], &d[inverse])
+		c[i][n + 1].Mod(&c[i][n + 1], &p)
+
+		c[i][n + 2] = r[i]
+		// Done makeing c_i's
+
+		// Assigning d_i and D_i to c_d and c_D respectiveky
+		cd[i] = d[i]
+		cD[i] = D[i]
+
+		// Finding sum of d_j^3, which is a term in c_d
+		var dICubed big.Int
+		dICubed.Mul(&d[i], &d[i])
+		dICubed.Mul(&dICubed, &d[i])
+		dICubed.Mod(&dICubed, &p)
+		SumDICubed.Add(&SumDICubed, &dICubed)
+	}
+
+	cd[n] = sd
+	cD[n] = delta
+
+	cd[n + 1].Sub(&SumDICubed, &delta)
+	cd[n + 1].Mod(&cd[n + 1], &p) // Storing Sum((d_j)^3) - delta
+	
+	cD[n + 1] = sD
+
+	cd[n + 2] = rd
+	
+	cD[n + 2] = rD
+
+	// Done doing the initial stage
+
+	// Computing t_1, ... , t_n challenge for Fiat-Shamir approach
+	h := sha256.New()
+
+	var t []big.Int
+	t = make([]big.Int, n)
+	f = make([]big.Int, n)
+	F = make([]big.Int, n)
+	
+	fd = *Zero
+	yd = *Zero
+	yD = *Zero
+	zd = *Zero
+	zD = *Zero
+	Z  = *Zero
+
+	for i := 0; i < n; i++ {
+		for j := 0; j < n + 3; i++ {
+			h.Write(c[i][j].Bytes()[:])	
+		}
+		t[i].SetBytes(h.Sum(nil))
+		t[i].Mod(&t[i], Lt) // Storing t_i as a random value less than Lt
+		h.Reset()
+
+		// Setting f_j = t_(pi(j)) + d_j
+		f[i].Add(&t[pi.forward[i]], &d[i])
+		f[i].Mod(&f[i], &q) // TODO: figure out modulo factor
+
+		// Setting F_j = (t_(pi(j)))^2 + D_j
+		tj_squared := t[pi.forward[i]]
+		tj_squared.Exp(&tj_squared, big.NewInt(2), &q) // TODO: figure out modulo factor
+		F[i].Add(&tj_squared, &D[i])
+		F[i].Mod(&F[i], &q) // TODO: figure out modulo factor
+
+		var part_fd, part_yd, part_yD, part_zd, part_zD big.Int
+
+		part_fd.Mul(&c[i][n + 1], &t[i])
+		fd.Add(&fd, &part_fd)
+		fd.Mod(&fd, &q) // TODO: check modulo
+
+		part_yd.Mul(&c[i][n], &t[i])
+		yd.Add(&yd, &part_yd)
+		yd.Mod(&yd, &q) // TODO: check modulo	
+
+		part_yD.Mul(&c[i][n + 1], &t[i])
+		part_yD.Mul(&part_yD, &t[i])
+		yD.Add(&yD, &part_yD)
+		yD.Mod(&yD, &q) // TODO: check modulo	
+
+		part_zd.Mul(&c[i][n + 2], &t[i])
+		zd.Add(&zd, &part_zd)
+		zd.Mod(&zd, &q) // TODO: check modulo	
+
+		part_zD.Mul(&c[i][n + 2], &t[i])
+		part_zD.Mul(&part_zD, &t[i])
+		zD.Add(&zD, &part_zD)
+		zD.Mod(&zD, &q) // TODO: check modulo
+
+	}
+
+	fd.Add(&fd, &cd[n + 1])
+	yd.Add(&yd, &cd[n])
+	yD.Add(&yD, &cD[n + 1])
+	zd.Add(&zd, &cd[n + 2])
+	zD.Add(&zD, &cD[n + 2])
+
+
+	// Need to do this seperately because this uses pi(i) to access elements of t
+	for i := 0; i < n; i++ {
+		var part_Z big.Int
+
+		part_Z.Mul(&t[pi.forward[i]], &R[i])
+		Z.Add(&Z, &part_Z)
+		Z.Mod(&Z, &q) // TODO: check modulo	
+	}
+
+	Z.Add(&Z, &RR)
+	
+	return
+}
+
+
 func GenerateGs(p *big.Int, q *big.Int, numGs int) (G []big.Int) {
 	for i := 0; i < numGs; i++ {
 		G = append(G, GenerateG(p, q))
@@ -466,3 +520,7 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 
 	return
 }
+
+// func CheckVerifiableSecretShuffle(c big.Int[][], cd big.Int[], cD big.Int[], ER Ciphertext, f big.Int[], fd big.Int, yd big.Int, zd big.Int, F big.Int[], yD big.Int, zD big.Int, Z big.Int) {
+		
+// }

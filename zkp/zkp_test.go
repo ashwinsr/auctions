@@ -2,6 +2,7 @@ package zkp
 
 import (
 	"math/big"
+	"math/rand"
 	"testing"
 )
 
@@ -102,3 +103,45 @@ func TestEncryptedValueIsOneOfTwo(test *testing.T) {
 		}
 	}
 }
+
+func makeRandPerm(n int) (Permutation) {
+ 	perm := rand.Perm(n)
+ 	var revperm []int
+ 	for i := 0; i < n; i++ {
+ 		revperm[perm[i]] = i
+ 	}
+ 	return Permutation{forward: perm, backward: revperm}
+ } 
+
+// func TestVerifiableSecretShuffle(test *testing.T) {
+
+// 	var RegularCiphertexts = []Ciphertext { 
+//  	   Ciphertext {
+// 	        alpha: *One, 
+// 	        beta: *FortyTwo, 
+// 	    },
+// 	    Ciphertext {
+// 	        alpha: *One, 
+// 	        beta: *One, 
+// 	    },
+// 	}
+// 	var ShuffledCiphertexts = []Ciphertext { 
+//  	   Ciphertext {
+// 	        alpha: *One, 
+// 	        beta: *One, 
+// 	    },
+// 	    Ciphertext {
+// 	        alpha: *One, 
+// 	        beta: *FortyTwo, 
+// 	    },
+// 	}
+
+// 	g := GenerateG(P, Q)
+// 	pi := makeRandPerm(len(e))
+
+// 	c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z := VerifiableSecretShuffle(RegularCiphertexts, ShuffledCiphertexts, *One, g, *P, *Q, pi, R []big.Int)	
+	
+// 	err := CheckVerifiableSecretShuffle(c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
+
+
+// }
