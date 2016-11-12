@@ -96,6 +96,7 @@ func (s *server) SendKey(ctx context.Context, in *pb.Key) (*google_protobuf.Empt
 		log.Printf("Starting to receive, waiting on channel\n")
 		// wait until we can receive keys
 		<-canReceiveKeys
+		log.Printf("Done waiting on channel!!!!!")
 
 		var key, t, r big.Int
 		key.SetBytes(in.Key) // TODO this how you access Key? Or GetKey()
@@ -120,44 +121,46 @@ func (s *server) SendKey(ctx context.Context, in *pb.Key) (*google_protobuf.Empt
 // TODO millionaire specific
 // MillionaireAlphaBeta implements pb.ZKPAuctionServer
 func (s *server) MillionaireAlphaBeta(ctx context.Context, in *pb.AlphaBeta) (*google_protobuf.Empty, error) {
-	// wait until we can receive alphas and betas
-	<-canReceiveAlphaBeta
-
-	if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != zkp.K_Mill {
-		log.Fatalf("Incorrect number of shit")
-	}
-
-	var abs AlphaBetaStruct
-
-	for i := 0; i < len(in.Alphas); i++ {
-		var alpha, beta, a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 big.Int
-		alpha.SetBytes(in.Alphas[i])
-		beta.SetBytes(in.Betas[i])
-		a_1.SetBytes(in.Proofs[i].A_1)
-		a_2.SetBytes(in.Proofs[i].A_2)
-		b_1.SetBytes(in.Proofs[i].B_1)
-		b_2.SetBytes(in.Proofs[i].B_2)
-		d_1.SetBytes(in.Proofs[i].D_1)
-		d_2.SetBytes(in.Proofs[i].D_2)
-		r_1.SetBytes(in.Proofs[i].R_1)
-		r_2.SetBytes(in.Proofs[i].R_2)
-
-		if err := zkp.CheckEncryptedValueIsOneOfTwo(alpha, beta, *zkp.P, *zkp.Q,
-			a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2,
-			*zkp.G, myState.publicKey, *zkp.Y_Mill); err != nil {
-			log.Fatalf("Received incorrect zero-knowledge proof for alpha/beta")
-		}
-		// TODO change to pass protobuf structs
-		abs.alphas = append(abs.alphas, alpha)
-		abs.betas = append(abs.betas, beta)
-	}
-
-	// TODO debugging
-	log.Printf("Received Alphas: %v", abs.alphas)
-	log.Printf("Received Betas: %v", abs.betas)
-
 	go func() {
+		// wait until we can receive alphas and betas
+		<-canReceiveAlphaBeta
+
+		if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != zkp.K_Mill {
+			log.Fatalf("Incorrect number of shit")
+		}
+
+		var abs AlphaBetaStruct
+
+		for i := 0; i < len(in.Alphas); i++ {
+			var alpha, beta, a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 big.Int
+			alpha.SetBytes(in.Alphas[i])
+			beta.SetBytes(in.Betas[i])
+			a_1.SetBytes(in.Proofs[i].A_1)
+			a_2.SetBytes(in.Proofs[i].A_2)
+			b_1.SetBytes(in.Proofs[i].B_1)
+			b_2.SetBytes(in.Proofs[i].B_2)
+			d_1.SetBytes(in.Proofs[i].D_1)
+			d_2.SetBytes(in.Proofs[i].D_2)
+			r_1.SetBytes(in.Proofs[i].R_1)
+			r_2.SetBytes(in.Proofs[i].R_2)
+
+			if err := zkp.CheckEncryptedValueIsOneOfTwo(alpha, beta, *zkp.P, *zkp.Q,
+				a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2,
+				*zkp.G, myState.publicKey, *zkp.Y_Mill); err != nil {
+				log.Fatalf("Received incorrect zero-knowledge proof for alpha/beta")
+			}
+			// TODO change to pass protobuf structs
+			abs.alphas = append(abs.alphas, alpha)
+			abs.betas = append(abs.betas, beta)
+		}
+
+		// TODO debugging
+		log.Printf("Received Alphas: %v", abs.alphas)
+		log.Printf("Received Betas: %v", abs.betas)
+
+		// go func() {
 		alphaBetaChan <- &abs
+		// }()
 	}()
 
 	return &google_protobuf.Empty{}, nil
@@ -170,99 +173,105 @@ func (s *server) MillionaireGammaDelta2(ctx context.Context, in *pb.MixedOutput)
 	return &google_protobuf.Empty{}, nil
 }
 func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.RandomizedOutput) (*google_protobuf.Empty, error) {
-	// wait until we can receive gammas and deltas
-	<-canReceiveGammasDeltas
-
-	if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != zkp.K_Mill {
-		log.Fatalf("Incorrect number of shit4")
-	}
-
-	var gds millionaire.GammaDeltaStruct
-
-	for j := 0; j < len(in.Gammas); j++ {
-		var gamma, delta big.Int
-		gamma.SetBytes(in.Gammas[j])
-		delta.SetBytes(in.Deltas[j])
-
-		gds.Gammas = append(gds.Gammas, gamma)
-		gds.Deltas = append(gds.Deltas, delta)
-
-		var bases, results, ts []big.Int
-		// TODO myGammasDeltas for now
-		bases = append(bases, myState.myGammasDeltas.Gammas[j])
-		bases = append(bases, myState.myGammasDeltas.Deltas[j])
-		results = append(results, gamma)
-		results = append(results, delta)
-
-		// set proof values
-		var r big.Int
-		r.SetBytes(in.Proofs[j].R)
-		for _, t := range in.Proofs[j].Ts {
-			var t_temp big.Int
-			t_temp.SetBytes(t)
-			ts = append(ts, t_temp)
-		}
-
-		log.Printf("Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
-		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
-			log.Fatalf("Received incorrect zero-knowledge proof for exponentiated gammas/deltas")
-		}
-	}
-
-	// TODO debugging
-	log.Printf("Received Exponentiated gammas: %v", gds.Gammas)
-	log.Printf("Received Exponentiated deltas: %v", gds.Deltas)
-
 	go func() {
+		// wait until we can receive gammas and deltas
+		<-canReceiveGammasDeltas
+
+		if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != zkp.K_Mill {
+			log.Fatalf("Incorrect number of shit4")
+		}
+
+		var gds millionaire.GammaDeltaStruct
+
+		for j := 0; j < len(in.Gammas); j++ {
+			var gamma, delta big.Int
+			gamma.SetBytes(in.Gammas[j])
+			delta.SetBytes(in.Deltas[j])
+
+			gds.Gammas = append(gds.Gammas, gamma)
+			gds.Deltas = append(gds.Deltas, delta)
+
+			var bases, results, ts []big.Int
+			// TODO myGammasDeltas for now
+			bases = append(bases, myState.myGammasDeltas.Gammas[j])
+			bases = append(bases, myState.myGammasDeltas.Deltas[j])
+			results = append(results, gamma)
+			results = append(results, delta)
+
+			// set proof values
+			var r big.Int
+			r.SetBytes(in.Proofs[j].R)
+			for _, t := range in.Proofs[j].Ts {
+				var t_temp big.Int
+				t_temp.SetBytes(t)
+				ts = append(ts, t_temp)
+			}
+
+			log.Printf("Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
+			if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+				log.Fatalf("Received incorrect zero-knowledge proof for exponentiated gammas/deltas")
+			}
+		}
+
+		// TODO debugging
+		log.Printf("Received Exponentiated gammas: %v", gds.Gammas)
+		log.Printf("Received Exponentiated deltas: %v", gds.Deltas)
+
+		// go func() {
 		exponentiatedGammasDeltasChan <- &gds
+		// }()
 	}()
+
 	return &google_protobuf.Empty{}, nil
 }
 
 func (s *server) MillionaireDecryptionInfo(ctx context.Context, in *pb.DecryptionInfo) (*google_protobuf.Empty, error) {
-	// wait until we can receive phis
-	<-canReceivePhis
-
-	if len(in.Phis) != len(in.Proofs) || uint(len(in.Proofs)) != zkp.K_Mill {
-		log.Fatalf("Incorrect number of shit5")
-	}
-
-	var phis millionaire.PhiStruct
-
-	for j := 0; j < len(in.Phis); j++ {
-		var phi big.Int
-		phi.SetBytes(in.Phis[j])
-
-		phis.Phis = append(phis.Phis, phi)
-
-		var bases, results, ts []big.Int
-		// proof equality of logarithms of the received phi and their public key
-		bases = append(bases, myState.phisBeforeExponentiation.Phis[j])
-		bases = append(bases, *zkp.G)
-		results = append(results, phi)
-		results = append(results, myState.keys[1]) // their public key
-
-		// set proof values
-		var r big.Int
-		r.SetBytes(in.Proofs[j].R)
-		for _, t := range in.Proofs[j].Ts {
-			var t_temp big.Int
-			t_temp.SetBytes(t)
-			ts = append(ts, t_temp)
-		}
-
-		log.Printf("Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
-		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
-			log.Fatalf("Received incorrect zero-knowledge proof for phis")
-		}
-	}
-
-	// TODO debugging
-	log.Printf("Received Phis: %v")
-
 	go func() {
+		// wait until we can receive phis
+		<-canReceivePhis
+
+		if len(in.Phis) != len(in.Proofs) || uint(len(in.Proofs)) != zkp.K_Mill {
+			log.Fatalf("Incorrect number of shit5")
+		}
+
+		var phis millionaire.PhiStruct
+
+		for j := 0; j < len(in.Phis); j++ {
+			var phi big.Int
+			phi.SetBytes(in.Phis[j])
+
+			phis.Phis = append(phis.Phis, phi)
+
+			var bases, results, ts []big.Int
+			// proof equality of logarithms of the received phi and their public key
+			bases = append(bases, myState.phisBeforeExponentiation.Phis[j])
+			bases = append(bases, *zkp.G)
+			results = append(results, phi)
+			results = append(results, myState.keys[1]) // their public key
+
+			// set proof values
+			var r big.Int
+			r.SetBytes(in.Proofs[j].R)
+			for _, t := range in.Proofs[j].Ts {
+				var t_temp big.Int
+				t_temp.SetBytes(t)
+				ts = append(ts, t_temp)
+			}
+
+			log.Printf("Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
+			if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+				log.Fatalf("Received incorrect zero-knowledge proof for phis")
+			}
+		}
+
+		// TODO debugging
+		log.Printf("Received Phis: %v")
+
+		// go func() {
 		phiChan <- &phis
+		// }()
 	}()
+
 	return &google_protobuf.Empty{}, nil
 }
 
@@ -297,6 +306,13 @@ func getHosts() []string {
 }
 
 func initClients(hosts []string, myAddr string) {
+
+	// initialize channels with correct amount of buffer space
+	canReceiveKeys = make(chan struct{}, len(hosts))
+	canReceiveAlphaBeta = make(chan struct{}, len(hosts))
+	canReceiveGammasDeltas = make(chan struct{}, len(hosts))
+	canReceivePhis = make(chan struct{}, len(hosts))
+
 	// generate clients sequentially, not so bad
 	for _, host := range hosts {
 		if host == myAddr {
@@ -312,12 +328,6 @@ func initClients(hosts []string, myAddr string) {
 
 		clients = append(clients, c)
 	}
-
-	// initialize channels with correct amount of buffer space
-	canReceiveKeys = make(chan struct{}, len(clients))
-	canReceiveAlphaBeta = make(chan struct{}, len(clients))
-	canReceiveGammasDeltas = make(chan struct{}, len(clients))
-	canReceivePhis = make(chan struct{}, len(clients))
 
 	log.Println("Finishing initializing clients")
 }
@@ -386,11 +396,14 @@ func (s *state) keyDistribution() {
 					Key:   s.myPublicKey.Bytes(),
 					Proof: zkpPrivKey,
 				})
+			log.Println("Sent key to client!!!")
 			if err != nil {
 				log.Fatalf("Error on sending key: %v", err)
 			}
 		}()
 	}
+
+	log.Println("Done! sending key to client...")
 
 	s.keys = append(s.keys, s.myPublicKey)
 
