@@ -74,3 +74,22 @@ func MillionaireCalculateGammaDelta(alpha_1 []big.Int, alpha_2 []big.Int,
 
 	return &gds
 }
+
+func MillionaireCalculateV(gamma1 big.Int, gamma2 big.Int, phi1 big.Int, phi2 big.Int, p big.Int) big.Int {
+	 var temp1, temp2, v big.Int
+	 
+	 // Calculate gamma1 * gamma2 mod p
+	 temp1.Mul(&gamma1, &gamma2)
+	 temp1.Mod(&temp1, &p)
+
+	 // Calculate 1/(phi1 * phi2) mod p
+	 temp2.Mul(&phi1, &phi2)
+     temp2.Mod(&temp2, &p)
+	 temp2.ModInverse(&temp2, &p)
+
+	 // Calculate v
+	 v.Mul(&temp1, &temp2)
+	 v.Mod(&v, &p)
+
+	 return v
+}

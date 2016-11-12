@@ -725,5 +725,13 @@ func (s *state) millionaire_Decryption() {
 	}
 
 	log.Printf("Received phis %v", s.theirPhis)
-	// TODO calcualte the final shit (division + which one is bigger)
+
+	// Calculate the final shit (division + which one is bigger)
+	for j := 0; j < int(zkp.K_Mill); j++ {
+		v := millionaire.MillionaireCalculateV(s.myExponentiatedGammasDeltas.Gammas[j], s.theirExponentiatedGammasDelta.Gammas[j], s.myPhis.Phis[j], s.theirPhis.Phis[j], *zkp.P)
+		if v.Cmp(zkp.One) == 0 {
+		   log.Fatalf("ID 0 is the winner\n")
+		}
+	}
+	log.Fatalf("ID 1 is the winner\n")
 }
