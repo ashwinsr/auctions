@@ -207,7 +207,7 @@ func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.Randomiz
 				ts = append(ts, t_temp)
 			}
 
-			log.Printf("Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
+			log.Printf("RECEIVE: Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
 			if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
 				log.Fatalf("Received incorrect zero-knowledge proof for exponentiated gammas/deltas")
 			}
@@ -539,7 +539,7 @@ func (s *state) millionaire_RandomizeOutput() {
 
 	var proofs []*pb.DiscreteLogEquality
 
-	var gammas, deltas [][]byte
+	var exponentiatedGammas, exponentiatedDeltas [][]byte
 
 	s.myExponentiatedGammasDeltas = new(millionaire.GammaDeltaStruct)
 
@@ -547,10 +547,6 @@ func (s *state) millionaire_RandomizeOutput() {
 	// TODO for now myGammasDeltas
 	for i := 0; i < len(s.myGammasDeltas.Gammas); i++ {
 		log.Println("Beginning random exponentiation2")
-
-		// for the protobuf struct
-		gammas = append(gammas, s.myGammasDeltas.Gammas[i].Bytes())
-		deltas = append(deltas, s.myGammasDeltas.Deltas[i].Bytes())
 
 		// this is our random exponent
 		var m big.Int
@@ -567,6 +563,10 @@ func (s *state) millionaire_RandomizeOutput() {
 		s.myExponentiatedGammasDeltas.Deltas = append(
 			s.myExponentiatedGammasDeltas.Deltas, newDelta)
 
+		// for the protobuf struct
+		exponentiatedGammas = append(exponentiatedGammas, newGamma.Bytes())
+		exponentiatedDeltas = append(exponentiatedDeltas, newDelta.Bytes())
+
 		// to pass the bases to the zkp generator
 		var gs []big.Int
 		gs = append(gs, s.myGammasDeltas.Gammas[i])
@@ -575,7 +575,25 @@ func (s *state) millionaire_RandomizeOutput() {
 
 		// create proof and add it to proof list
 		ts, r := zkp.DiscreteLogEquality(m, gs, *zkp.P, *zkp.Q)
-		log.Printf("Creating proof.\nBases=%v\nExponent=%v\nTs=%vn,R=%v\n", gs, m, ts, r)
+
+		// TODO remove
+		//checking the proof here before we send it
+		var results, results2 []big.Int
+		var a, b big.Int
+		a.Exp(&gs[0], &m, zkp.P)
+		b.Exp(&gs[1], &m, zkp.P)
+		results = append(results, a)
+		results = append(results, b)
+		results2 = append(results2, s.myExponentiatedGammasDeltas.Gammas[i])
+		results2 = append(results2, s.myExponentiatedGammasDeltas.Deltas[i])
+		err := zkp.CheckDiscreteLogEqualityProof(gs, results, ts, r, *zkp.P, *zkp.Q)
+		log.Printf("Creating proof.\nBases=%v\nExponent=%v\nResults=%v\nResults2=%v\nTs=%vn,R=%v\n", gs, m, results, results2, ts, r)
+		if err != nil {
+			log.Printf("WHAT THE FUCK %v\n", err)
+		} else {
+			log.Printf("Yay!!! Correct exponentiatedGammas exponentiatedDeltas proof")
+		}
+		// TODO done
 
 		log.Println("Beginning random exponentiation5")
 		var proof pb.DiscreteLogEquality
@@ -597,13 +615,13 @@ func (s *state) millionaire_RandomizeOutput() {
 
 	// Publish public key to all clients
 	for _, client := range clients {
-		log.Println("Sending exponentiated gammas/deltas...")
+		log.Println("Sending exponentiated exponentiatedGammas/exponentiatedDeltas...")
 		go func() {
 			// Needs to be a goroutine because otherwise we block waiting for a response
 			_, err := client.MillionaireRandomizeOutput(context.Background(),
 				&pb.RandomizedOutput{
-					Gammas: gammas,
-					Deltas: deltas,
+					Gammas: exponentiatedGammas,
+					Deltas: exponentiatedDeltas,
 					Proofs: proofs,
 				})
 			if err != nil {
