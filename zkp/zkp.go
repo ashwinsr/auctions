@@ -197,7 +197,7 @@ func EncryptedValueIsOneOfTwo(m big.Int, y big.Int, r big.Int, g big.Int, z big.
 	return a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2
 }
 
-func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.Int, p big.Int, q big.Int, pi Permutation, R []big.Int) (c [][]big.Int, cd []big.Int, cD []big.Int, ER Ciphertext, f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int, yD big.Int, zD big.Int, Z big.Int) {
+func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.Int, p big.Int, q big.Int, pi Permutation, R []big.Int) (c []big.Int, cd big.Int, cD big.Int, ER Ciphertext, f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int, yD big.Int, zD big.Int, Z big.Int) {
 	var rd, rD, sd, sD, delta, RR big.Int
 	var n int
 	n = len(e)
@@ -206,8 +206,7 @@ func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.In
 	d = make([]big.Int, n)
 	r = make([]big.Int, n)
 	D = make([]big.Int, n)
-
-	c = make([][]big.Int, n)
+	c = make([]big.Int, n)
 
 
 	for i := 0; i < n; i++ {
@@ -229,12 +228,10 @@ func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.In
 	ER.alpha.Exp(&y, &RR, &p) // This is the encryption E(1; R_R)
 	ER.beta.Exp(&g, &RR, &p)
 
-	var SumDICubed big.Int
+	SumDICubed := Zero
 
-	SumDICubed.Add(Zero, Zero)
-
-	cd = make([]big.Int, n + 3)
-	cD = make([]big.Int, n + 3)
+	cd_commitment_array := make([]big.Int, n + 2)
+	cD_commitment_array := make([]big.Int, n + 2)
 
 	for i := 0; i < n; i++ {
 		var temp big.Int
@@ -246,26 +243,25 @@ func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.In
 		ER.beta.Mul(&ER.beta, &temp)
 		ER.alpha.Mod(&ER.alpha, &p)
 
-		
-		c[i] = make([]big.Int, n + 3)
+		c_i := make([]big.Int, n + 2) // TODO: put this outside the for loop	
 		
 		// Begin setting up of c_i's
 		inverse := pi.backward[i]
 
-		c[i][inverse].Sub(One, Zero);
+		c_i[inverse] = *One;
 
-		c[i][n].Mul(Three, &d[inverse])
-		c[i][n].Mod(&c[i][n], &p)
+		c_i[n].Mul(Three, &d[inverse])
+		c_i[n].Mod(&c_i[n], &p)
 
-		c[i][n + 1].Mul(&c[i][n], &d[inverse])
-		c[i][n + 1].Mod(&c[i][n + 1], &p)
+		c_i[n + 1].Mul(&c_i[n], &d[inverse])
+		c_i[n + 1].Mod(&c_i[n + 1], &p)
 
-		c[i][n + 2] = r[i]
+		c[i] = CreateCommitment(c_i, r[i])
 		// Done makeing c_i's
 
 		// Assigning d_i and D_i to c_d and c_D respectiveky
-		cd[i] = d[i]
-		cD[i] = D[i]
+		cd_commitment_array[i] = d[i]
+		cD_commitment_array[i] = D[i]
 
 		// Finding sum of d_j^3, which is a term in c_d
 		var dICubed big.Int
@@ -275,17 +271,16 @@ func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.In
 		SumDICubed.Add(&SumDICubed, &dICubed)
 	}
 
-	cd[n] = sd
-	cD[n] = delta
+	cd_commitment_array[n] = sd
+	cD_commitment_array[n] = delta
 
-	cd[n + 1].Sub(&SumDICubed, &delta)
-	cd[n + 1].Mod(&cd[n + 1], &p) // Storing Sum((d_j)^3) - delta
+	cd_commitment_array[n + 1].Sub(&SumDICubed, &delta)
+	cd_commitment_array[n + 1].Mod(&cd_commitment_array[n + 1], &p) // Storing Sum((d_j)^3) - delta
 	
-	cD[n + 1] = sD
+	cD_commitment_array[n + 1] = sD
 
-	cd[n + 2] = rd
-	
-	cD[n + 2] = rD
+	cd = CreateCommitment(cd_commitment_array, rd)
+	cD = CreateCommitment(cD_commitment_array, rD)
 
 	// Done doing the initial stage
 
@@ -305,9 +300,7 @@ func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.In
 	Z  = *Zero
 
 	for i := 0; i < n; i++ {
-		for j := 0; j < n + 3; i++ {
-			h.Write(c[i][j].Bytes()[:])	
-		}
+		h.Write(c[i].Bytes()[:])
 		t[i].SetBytes(h.Sum(nil))
 		t[i].Mod(&t[i], Lt) // Storing t_i as a random value less than Lt
 		h.Reset()
@@ -521,6 +514,81 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	return
 }
 
-// func CheckVerifiableSecretShuffle(c big.Int[][], cd big.Int[], cD big.Int[], ER Ciphertext, f big.Int[], fd big.Int, yd big.Int, zd big.Int, F big.Int[], yD big.Int, zD big.Int, Z big.Int) {
+func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, p big.Int, q big.Int, g big.Int, y big.Int, c []big.Int, cd big.Int, cD big.Int, ER Ciphertext, f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int, yD big.Int, zD big.Int, Z big.Int) {
+	
+	h := sha256.New()
+	var t []big.Int
+
+	RHS1_commitment_array := make([]big.Int, n + 2)
+	RHS2_commitment_array := make([]big.Int, n + 2)
+	LHS1 := cd
+	LHS2 := cD
+	LHS3 := Ciphertext{alpha: *One, beta: *One}
+	
+	for i := 0; i < n; i++ {
+		h.Write(c[i].Bytes()[:])
+		t[i].SetBytes(h.Sum(nil))
+		t[i].Mod(&t[i], Lt) // Storing t_i as a random value less than Lt
+		h.Reset()
+
+		var ct big.Int
+		ct.Exp(c[i], t[i])
+		LHS1.Mul(LHS1, &ct)
+		// LHS1.Mod(&LHS1, ) This needs to be figured out
+
+		ct.Mul(t[i], t[i])
+		ct.Exp(c[i], ct) // Modulo issues
 		
-// }
+		LHS2.Mul(LHS2, &ct)
+		// LHS2.Mod(LHS2, ) This needs to be figured out
+		
+		var Ef Ciphertext
+		Ef.alpha.Mul(E[i].alpha, f[i])
+		Ef.beta.Mul(E[i].beta, f[i])
+		LHS3.alpha.Mul(LHS3.alpha, Ef.alpha)
+		LHS3.beta.Mul(LHS3.beta, Ef.beta)
+		// LHS3.alpha.Mod(LHS3.alpha, ) Modulo needs to be figured
+		// LHS3.beta.Mod(LHS3.beta, ) Modulo needs to be figured
+
+		RHS1_commitment_array[i] = f[i]
+		RHS2_commitment_array[i] = F[i]
+
+		var et Ciphertext
+		et.alpha.Mul(e[i].alpha, t[i])
+		et.beta.Mul(e[i].beta, t[i])
+		RHS3.alpha.Mul(RHS3.alpha, et.alpha)
+		RHS3.beta.Mul(RHS3.beta, et.beta)
+
+	}
+
+	RHS3_part.alpha.Exp(&y, &Z, &p) // This is the encryption E(1; R_R)
+	RHS3_part.beta.Exp(&g, &Z, &p)
+
+	RHS3.alpha.Mul(&RHS3.alpha, RHS3_part.alpha)
+	RHS3.beta.Mul(&RHS3.beta, RHS3_part.beta)
+
+	// RHS3.alpha.Mod(RHS3.alpha, ) TODO Modulo
+	// RHS3.beta.Mod(RHS3.beta, ) TODO Modulo
+
+	RHS1_commitment_array[n] = yd
+	RHS2_commitment_array[n] = fD
+
+	RHS1_commitment_array[n + 1] = fd
+	RHS2_commitment_array[n + 1] = yD
+
+	RHS1 := CreateCommitment(RHS1_commitment_array, zd)
+	RHS2 := CreateCommitment(RHS2_commitment_array, zD)
+
+	if LHS1.Cmp(&RHS1) != 0 {
+		err = fmt.Errorf("Verifiable Random Shuffle Step 1 WRONG! LHS %v, RHS %v.\n", LHS1, RHS1)
+	}
+
+	if LHS2.Cmp(&RHS2) != 0 {
+		err = fmt.Errorf("Verifiable Random Shuffle Step 2 WRONG! LHS %v, RHS %v.\n", LHS2, RHS2)
+	}
+
+	if LHS3.alpha.Cmp(&RHS3.alpha) != 0 || LHS3.beta.Cmp(&RHS3.beta) != 0 {
+		err = fmt.Errorf("Verifiable Random Shuffle Step 3 WRONG! LHS %v, RHS %v.\n", LHS3.alpha, RHS3.alpha)
+	}	
+	
+}

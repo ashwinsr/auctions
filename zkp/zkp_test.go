@@ -141,7 +141,7 @@ func makeRandPerm(n int) (Permutation) {
 
 // 	c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z := VerifiableSecretShuffle(RegularCiphertexts, ShuffledCiphertexts, *One, g, *P, *Q, pi, R []big.Int)	
 	
-// 	err := CheckVerifiableSecretShuffle(c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
+// 	err := CheckVerifiableSecretShuffle(e, E, p, q, g, y, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
 
 
 // }
