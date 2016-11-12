@@ -231,6 +231,7 @@ func (s *server) MillionaireDecryptionInfo(ctx context.Context, in *pb.Decryptio
 		<-canReceivePhis
 
 		if len(in.Phis) != len(in.Proofs) || uint(len(in.Proofs)) != zkp.K_Mill {
+			log.Printf("len of phis=%v, len of proofs=%v, k=%v\n", len(in.Phis), uint(len(in.Proofs)), zkp.K_Mill)
 			log.Fatalf("Incorrect number of shit5")
 		}
 
@@ -265,7 +266,7 @@ func (s *server) MillionaireDecryptionInfo(ctx context.Context, in *pb.Decryptio
 		}
 
 		// TODO debugging
-		log.Printf("Received Phis: %v")
+		log.Printf("Received Phis: %v", phis)
 
 		// go func() {
 		phiChan <- &phis
@@ -351,6 +352,7 @@ func main() {
 	myState.millionaire_MixOutput1()
 	myState.millionaire_MixOutput2()
 	myState.millionaire_RandomizeOutput()
+	myState.millionaire_Decryption()
 
 	// TODO do this better
 	for {
@@ -522,8 +524,14 @@ func (s *state) millionaire_AlphaBetaDistribute() {
 
 func (s *state) millionaire_MixOutput1() {
 	// mostly a no-op just calculate (gamma, delta)
-	gds := millionaire.MillionaireCalculateGammaDelta(s.myAlphasBetas.alphas, s.theirAlphasBetas.alphas,
-		s.myAlphasBetas.betas, s.theirAlphasBetas.betas, *zkp.Y_Mill, *zkp.P)
+	var gds *millionaire.GammaDeltaStruct
+	if *id == 0 {
+		gds = millionaire.MillionaireCalculateGammaDelta(s.myAlphasBetas.alphas, s.theirAlphasBetas.alphas,
+			s.myAlphasBetas.betas, s.theirAlphasBetas.betas, *zkp.Y_Mill, *zkp.P)
+	} else {
+		gds = millionaire.MillionaireCalculateGammaDelta(s.theirAlphasBetas.alphas, s.myAlphasBetas.alphas,
+			s.theirAlphasBetas.betas, s.myAlphasBetas.betas, *zkp.Y_Mill, *zkp.P)
+	}
 	// TODO for now just set both
 	s.myGammasDeltas = gds
 	s.theirGammasDeltas = gds
@@ -545,7 +553,7 @@ func (s *state) millionaire_RandomizeOutput() {
 
 	// compute exponentiated gamma and delta
 	// TODO for now myGammasDeltas
-	for i := 0; i < len(s.myGammasDeltas.Gammas); i++ {
+	for i := 0; i < int(zkp.K_Mill); i++ {
 		log.Println("Beginning random exponentiation2")
 
 		// this is our random exponent
@@ -657,7 +665,7 @@ func (s *state) millionaire_Decryption() {
 
 	// compute exponentiated gamma and delta
 	// TODO for now myGammasDeltas
-	for i := 0; i < len(s.myPhis.Phis); i++ {
+	for i := 0; i < int(zkp.K_Mill); i++ {
 		// calculate phi
 		var phi, phi2 big.Int
 		phi.Mul(&s.myExponentiatedGammasDeltas.Deltas[i], &s.theirExponentiatedGammasDelta.Deltas[i])
