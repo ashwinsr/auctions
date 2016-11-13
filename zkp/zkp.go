@@ -316,35 +316,47 @@ func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.In
 
 		var part_fd, part_yd, part_yD, part_zd, part_zD big.Int
 
-		part_fd.Mul(&c[i][n+1], &t[i])
+		inverse := pi.backward[i]
+
+		part_fd.Mul(&d[inverse], &t[i])
+		part_fd.Mul(&d[inverse], &part_fd)
 		fd.Add(&fd, &part_fd)
 		fd.Mod(&fd, &q) // TODO: check modulo
 
-		part_yd.Mul(&c[i][n], &t[i])
+
+		part_yd.Mul(&d[inverse], &t[i])
 		yd.Add(&yd, &part_yd)
 		yd.Mod(&yd, &q) // TODO: check modulo
 
-		part_yD.Mul(&c[i][n+1], &t[i])
-		part_yD.Mul(&part_yD, &t[i])
+		part_yD.Mul(&d[inverse], &t[i])
+		part_yD.Mul(&part_yD, &part_yD)
 		yD.Add(&yD, &part_yD)
 		yD.Mod(&yD, &q) // TODO: check modulo
 
-		part_zd.Mul(&c[i][n+2], &t[i])
+		part_zd.Mul(&r[i], &t[i])
 		zd.Add(&zd, &part_zd)
 		zd.Mod(&zd, &q) // TODO: check modulo
 
-		part_zD.Mul(&c[i][n+2], &t[i])
+		part_zD.Mul(&r[i], &t[i])
 		part_zD.Mul(&part_zD, &t[i])
 		zD.Add(&zD, &part_zD)
 		zD.Mod(&zD, &q) // TODO: check modulo
 
 	}
 
-	fd.Add(&fd, &cd[n+1])
-	yd.Add(&yd, &cd[n])
-	yD.Add(&yD, &cD[n+1])
-	zd.Add(&zd, &cd[n+2])
-	zD.Add(&zD, &cD[n+2])
+	fd.Mul(Three, &fd)
+	fd.Add(&fd, &cd_commitment_array[n+1])
+
+	yd.Mul(Three, &yd)
+	yd.Add(&yd, &cd_commitment_array[n])
+
+	yD.Mul(Three, &yD)
+	yD.Add(&yD, &cD_commitment_array[n+1])
+
+	zd.Add(&zd, &rd)
+	zD.Add(&zD, &rD)
+
+	// Modulo of all these things above TODO
 
 	// Need to do this seperately because this uses pi(i) to access elements of t
 	for i := 0; i < n; i++ {
