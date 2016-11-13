@@ -2,7 +2,7 @@ package millionaire
 
 import (
 	"math/big"
-
+	"log"
 	"github.com/ashwinsr/auctions/zkp"
 )
 
@@ -45,10 +45,11 @@ func multiplyDivideExponentiate(a1 []big.Int, a2 []big.Int, j int, p big.Int) bi
 func MillionaireCalculateGammaDelta(alpha_1 []big.Int, alpha_2 []big.Int,
 	beta_1 []big.Int, beta_2 []big.Int, bigY big.Int, p big.Int) *GammaDeltaStruct {
 	var gds GammaDeltaStruct
-	var gammaJ, deltaJ big.Int
-	var temp, temp2, temp3, temp4 big.Int
 
 	for j := 0; uint(j) < zkp.K_Mill; j++ {
+		var gammaJ, deltaJ big.Int
+		var temp, temp2, temp3, temp4 big.Int
+
 		// Compute gammaJ = Y*alpha_2j / alpha_1j
 		temp.ModInverse(&alpha_1[j], &p)
 		temp.Mul(&alpha_2[j], &temp)
@@ -69,6 +70,8 @@ func MillionaireCalculateGammaDelta(alpha_1 []big.Int, alpha_2 []big.Int,
 		temp4 = multiplyDivideExponentiate(beta_1, beta_2, j, p)
 		deltaJ.Mul(&temp4, &deltaJ)
 		deltaJ.Mod(&deltaJ, &p)
+
+		log.Printf("At j=%v, gamma = %v and delta = %v\n", j, gammaJ, deltaJ)
 
 		gds.Gammas = append(gds.Gammas, gammaJ)
 		gds.Deltas = append(gds.Deltas, deltaJ)
