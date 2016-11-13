@@ -93,17 +93,17 @@ type server struct{}
 // SendKey implements pb.ZKPAuctionServer
 func (s *server) SendKey(ctx context.Context, in *pb.Key) (*google_protobuf.Empty, error) {
 	go func() {
-		log.Printf("Starting to receive, waiting on channel\n")
+		// log.Printf("Starting to receive, waiting on channel\n")
 		// wait until we can receive keys
 		<-canReceiveKeys
-		log.Printf("Done waiting on channel!!!!!")
+		// log.Printf("Done waiting on channel!!!!!")
 
 		var key, t, r big.Int
 		key.SetBytes(in.Key) // TODO this how you access Key? Or GetKey()
 		t.SetBytes(in.GetProof().T)
 		r.SetBytes(in.GetProof().R)
 
-		log.Printf("Received key: %v\n", key)
+		// log.Printf("Received key: %v\n", key)
 
 		if err := zkp.CheckDiscreteLogKnowledgeProof(*zkp.G, key, t, r, *zkp.P, *zkp.Q); err != nil {
 			log.Fatalf("Received incorrect zero-knowledge proof. Key=%v, t=%v, r=%v", key, t, r)
@@ -155,8 +155,8 @@ func (s *server) MillionaireAlphaBeta(ctx context.Context, in *pb.AlphaBeta) (*g
 		}
 
 		// TODO debugging
-		log.Printf("Received Alphas: %v", abs.alphas)
-		log.Printf("Received Betas: %v", abs.betas)
+		// log.Printf("Received Alphas: %v", abs.alphas)
+		// log.Printf("Received Betas: %v", abs.betas)
 
 		// go func() {
 		alphaBetaChan <- &abs
@@ -207,15 +207,15 @@ func (s *server) MillionaireRandomizeOutput(ctx context.Context, in *pb.Randomiz
 				ts = append(ts, t_temp)
 			}
 
-			log.Printf("RECEIVE: Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
+			// log.Printf("RECEIVE: Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
 			if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
 				log.Fatalf("Received incorrect zero-knowledge proof for exponentiated gammas/deltas")
 			}
 		}
 
 		// TODO debugging
-		log.Printf("Received Exponentiated gammas: %v", gds.Gammas)
-		log.Printf("Received Exponentiated deltas: %v", gds.Deltas)
+		// log.Printf("Received Exponentiated gammas: %v", gds.Gammas)
+		// log.Printf("Received Exponentiated deltas: %v", gds.Deltas)
 
 		// go func() {
 		exponentiatedGammasDeltasChan <- &gds
@@ -259,14 +259,14 @@ func (s *server) MillionaireDecryptionInfo(ctx context.Context, in *pb.Decryptio
 				ts = append(ts, t_temp)
 			}
 
-			log.Printf("Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
+			// log.Printf("Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
 			if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
 				log.Fatalf("Received incorrect zero-knowledge proof for phis")
 			}
 		}
 
 		// TODO debugging
-		log.Printf("Received Phis: %v", phis)
+		// log.Printf("Received Phis: %v", phis)
 
 		// go func() {
 		phiChan <- &phis
@@ -330,7 +330,7 @@ func initClients(hosts []string, myAddr string) {
 		clients = append(clients, c)
 	}
 
-	log.Println("Finishing initializing clients")
+	// log.Println("Finishing initializing clients")
 }
 
 func main() {
@@ -368,20 +368,21 @@ func main() {
  * 6. Calculates the final public key, and stores into state.
  */
 func (s *state) keyDistribution() {
-	log.Println("Beginning key distribution")
+	// log.Println("Beginning key distribution")
 
 	// Generate private key
 	s.myPrivateKey.Rand(zkp.RandGen, zkp.Q)
 	// Calculate public key
 	s.myPublicKey.Exp(zkp.G, &s.myPrivateKey, zkp.P)
 
-	log.Printf("My public key: %v\n", s.myPublicKey)
+	log.Printf("My private key: %v\n", s.myPrivateKey.String())
+	log.Printf("My public key: %v\n", s.myPublicKey.String())
 
 	// Generate zkp of private key
 	t, r := zkp.DiscreteLogKnowledge(s.myPrivateKey, *zkp.G, *zkp.P, *zkp.Q)
 	// Create proto structure of zkp
 	zkpPrivKey := &pb.DiscreteLogKnowledge{T: t.Bytes(), R: r.Bytes()}
-	log.Printf("Sending t=%v, r=%v", t, r)
+	// log.Printf("Sending t=%v, r=%v", t, r)
 
 	// Signal to all receivers that we can receive now
 	for i := 0; i < len(clients); i++ {
@@ -390,7 +391,8 @@ func (s *state) keyDistribution() {
 
 	// Publish public key to all clients
 	for _, client := range clients {
-		log.Println("Sending key to client...")
+		// log.Println("Sending key to client...")
+		client := client
 		go func() {
 			// Needs to be a goroutine because otherwise we block waiting for a response
 			_, err := client.SendKey(context.Background(),
@@ -398,14 +400,14 @@ func (s *state) keyDistribution() {
 					Key:   s.myPublicKey.Bytes(),
 					Proof: zkpPrivKey,
 				})
-			log.Println("Sent key to client!!!")
+			// log.Println("Sent key to client!!!")
 			if err != nil {
 				log.Fatalf("Error on sending key: %v", err)
 			}
 		}()
 	}
 
-	log.Println("Done! sending key to client...")
+	// log.Println("Done! sending key to client...")
 
 	s.keys = append(s.keys, s.myPublicKey)
 
@@ -424,6 +426,8 @@ func (s *state) keyDistribution() {
 		s.publicKey.Mul(&s.publicKey, &key)
 	}
 	s.publicKey.Mod(&s.publicKey, zkp.P)
+
+	log.Printf("Calculated public key: %v\n", s.publicKey.String())
 }
 
 func (s *state) millionaire_AlphaBetaDistribute() {
@@ -439,11 +443,14 @@ func (s *state) millionaire_AlphaBetaDistribute() {
 		var alphaJ, betaJ, rJ big.Int
 		rJ.Rand(zkp.RandGen, zkp.Q)
 
+		log.Printf("r_%v,%v = %v\n", *id, j, rJ.String())
+
 		// get the j-th bit of bid
 		Bij := (((*bid) >> j) & 1)
+		log.Printf("B_%v,%v = %v", *id, j, Bij)
 
 		// calculate alpha_j
-		log.Printf("Public key: %v, Rj: %v, P: %v\n", s.publicKey, rJ, *zkp.P)
+		// log.Printf("Public key: %v, Rj: %v, P: %v\n", s.publicKey, rJ, *zkp.P)
 		alphaJ.Exp(&s.publicKey, &rJ, zkp.P) // TODO mod P?
 		if Bij == 1 {
 			alphaJ.Mul(&alphaJ, zkp.Y_Mill)
@@ -452,8 +459,9 @@ func (s *state) millionaire_AlphaBetaDistribute() {
 
 		// calculate beta_j
 		betaJ.Exp(zkp.G, &rJ, zkp.P)
+		log.Printf("alpha_%v: %v\n", j, alphaJ)
+		log.Printf("beta_%v: %v\n", j, betaJ)
 
-		log.Printf("alphaJ: %v\n", alphaJ)
 		alphas = append(alphas, alphaJ.Bytes())
 		alphasInts = append(alphasInts, alphaJ)
 		betas = append(betas, betaJ.Bytes())
@@ -472,7 +480,7 @@ func (s *state) millionaire_AlphaBetaDistribute() {
 		if err := zkp.CheckEncryptedValueIsOneOfTwo(alphaJ, betaJ, *zkp.P, *zkp.Q,
 			a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2,
 			*zkp.G, myState.publicKey, *zkp.Y_Mill); err != nil {
-			log.Fatalf("WE ARE SENDING AN INCORRECT FUCKING PROOF")
+			log.Fatalf("WE ARE SENDING AN INCORRECT PROOF")
 		}
 
 		proofs = append(proofs, &pb.EqualsOneOfTwo{
@@ -493,9 +501,10 @@ func (s *state) millionaire_AlphaBetaDistribute() {
 	}
 
 	for _, client := range clients {
-		log.Println("Sending alpha, beta to client...")
-		log.Printf("Sending alphas: %v\n", alphas)
-		log.Printf("Sending betas: %v\n", betas)
+		client := client
+		// log.Println("Sending alpha, beta to client...")
+		// log.Printf("Sending alphas: %v\n", alphas)
+		// log.Printf("Sending betas: %v\n", betas)
 		go func() {
 			_, err := client.MillionaireAlphaBeta(context.Background(),
 				&pb.AlphaBeta{
@@ -535,6 +544,8 @@ func (s *state) millionaire_MixOutput1() {
 	// TODO for now just set both
 	s.myGammasDeltas = gds
 	s.theirGammasDeltas = gds
+
+	log.Printf("Gammas/deltas: %v\n", gds)
 }
 
 func (s *state) millionaire_MixOutput2() {
@@ -543,7 +554,7 @@ func (s *state) millionaire_MixOutput2() {
 
 // Takes gamme and delta to a random exponent, proves the equality of the exponent (logarithm)
 func (s *state) millionaire_RandomizeOutput() {
-	log.Println("Beginning random exponentiation")
+	// log.Println("Beginning random exponentiation")
 
 	var proofs []*pb.DiscreteLogEquality
 
@@ -553,17 +564,19 @@ func (s *state) millionaire_RandomizeOutput() {
 
 	// compute exponentiated gamma and delta
 	// TODO for now myGammasDeltas
-	for i := 0; i < int(zkp.K_Mill); i++ {
-		log.Println("Beginning random exponentiation2")
+	for j := 0; j < int(zkp.K_Mill); j++ {
+		// log.Println("Beginning random exponentiation2")
 
 		// this is our random exponent
 		var m big.Int
 		m.Rand(zkp.RandGen, zkp.Q)
 
 		var newGamma, newDelta big.Int
-		newGamma.Exp(&s.myGammasDeltas.Gammas[i], &m, zkp.P)
-		newDelta.Exp(&s.myGammasDeltas.Deltas[i], &m, zkp.P)
-		log.Println("Beginning random exponentiation3")
+		newGamma.Exp(&s.myGammasDeltas.Gammas[j], &m, zkp.P)
+		newDelta.Exp(&s.myGammasDeltas.Deltas[j], &m, zkp.P)
+		// log.Println("Beginning random exponentiation3")
+
+		log.Printf("m_%v = %v, gamma_%v = %v, delta_%v = %v\n", j, m.String(), j, newGamma.String(), j, newDelta.String())
 
 		s.myExponentiatedGammasDeltas.Gammas = append(
 			s.myExponentiatedGammasDeltas.Gammas, newGamma)
@@ -577,9 +590,9 @@ func (s *state) millionaire_RandomizeOutput() {
 
 		// to pass the bases to the zkp generator
 		var gs []big.Int
-		gs = append(gs, s.myGammasDeltas.Gammas[i])
-		gs = append(gs, s.myGammasDeltas.Deltas[i])
-		log.Println("Beginning random exponentiation4")
+		gs = append(gs, s.myGammasDeltas.Gammas[j])
+		gs = append(gs, s.myGammasDeltas.Deltas[j])
+		// log.Println("Beginning random exponentiation4")
 
 		// create proof and add it to proof list
 		ts, r := zkp.DiscreteLogEquality(m, gs, *zkp.P, *zkp.Q)
@@ -592,28 +605,28 @@ func (s *state) millionaire_RandomizeOutput() {
 		b.Exp(&gs[1], &m, zkp.P)
 		results = append(results, a)
 		results = append(results, b)
-		results2 = append(results2, s.myExponentiatedGammasDeltas.Gammas[i])
-		results2 = append(results2, s.myExponentiatedGammasDeltas.Deltas[i])
+		results2 = append(results2, s.myExponentiatedGammasDeltas.Gammas[j])
+		results2 = append(results2, s.myExponentiatedGammasDeltas.Deltas[j])
 		err := zkp.CheckDiscreteLogEqualityProof(gs, results, ts, r, *zkp.P, *zkp.Q)
-		log.Printf("Creating proof.\nBases=%v\nExponent=%v\nResults=%v\nResults2=%v\nTs=%vn,R=%v\n", gs, m, results, results2, ts, r)
+		// log.Printf("Creating proof.\nBases=%v\nExponent=%v\nResults=%v\nResults2=%v\nTs=%vn,R=%v\n", gs, m, results, results2, ts, r)
 		if err != nil {
-			log.Printf("WHAT THE FUCK %v\n", err)
+			log.Printf("WHAT THE heck %v\n", err)
 		} else {
-			log.Printf("Yay!!! Correct exponentiatedGammas exponentiatedDeltas proof")
+			// log.Printf("Yay!!! Correct exponentiatedGammas exponentiatedDeltas proof")
 		}
 		// TODO done
 
-		log.Println("Beginning random exponentiation5")
+		// log.Println("Beginning random exponentiation5")
 		var proof pb.DiscreteLogEquality
 		for _, t := range ts {
 			proof.Ts = append(proof.Ts, t.Bytes())
 		}
 
-		log.Println("Beginning random exponentiation6")
+		// log.Println("Beginning random exponentiation6")
 		proof.R = r.Bytes()
 		proofs = append(proofs, &proof)
 
-		log.Println("Beginning random exponentiation7")
+		// log.Println("Beginning random exponentiation7")
 	}
 
 	// Signal to all receivers that we can receive now
@@ -623,7 +636,8 @@ func (s *state) millionaire_RandomizeOutput() {
 
 	// Publish public key to all clients
 	for _, client := range clients {
-		log.Println("Sending exponentiated exponentiatedGammas/exponentiatedDeltas...")
+		client := client
+		// log.Println("Sending exponentiated exponentiatedGammas/exponentiatedDeltas...")
 		go func() {
 			// Needs to be a goroutine because otherwise we block waiting for a response
 			_, err := client.MillionaireRandomizeOutput(context.Background(),
@@ -638,7 +652,7 @@ func (s *state) millionaire_RandomizeOutput() {
 		}()
 	}
 
-	log.Println("Beginning random exponentiation8")
+	// log.Println("Beginning random exponentiation8")
 
 	// Wait for gammas/deltas of all other clients (should be just 1 for millionaire)
 	// TODO error handling
@@ -646,7 +660,7 @@ func (s *state) millionaire_RandomizeOutput() {
 		s.theirExponentiatedGammasDelta = <-exponentiatedGammasDeltasChan
 	}
 
-	log.Println("Beginning random exponentiation9")
+	// log.Println("Beginning random exponentiation9")
 
 	log.Printf("Received exponentiated gammas/deltas %v", s.theirExponentiatedGammasDelta)
 	// TODO calcualte the final shit
@@ -654,7 +668,7 @@ func (s *state) millionaire_RandomizeOutput() {
 
 // Calculates phis in order to decrypt them
 func (s *state) millionaire_Decryption() {
-	log.Println("Beginning decryption")
+	// log.Println("Beginning decryption")
 
 	var proofs []*pb.DiscreteLogEquality
 
@@ -673,8 +687,13 @@ func (s *state) millionaire_Decryption() {
 		// before exponentiating, add it to our list for checking the ZKP
 		phi2.Set(&phi)
 		s.phisBeforeExponentiation.Phis = append(s.phisBeforeExponentiation.Phis, phi2)
+
+		log.Printf("Before exponentiation, phi_%v = %v\n", i, phi2.String())
+
 		phi.Exp(&phi, &s.myPrivateKey, zkp.P)
 		s.myPhis.Phis = append(s.myPhis.Phis, phi)
+
+		log.Printf("phi_%v = %v\n", i, phi.String())
 
 		// for the protobuf struct
 		phis = append(phis, phi.Bytes())
@@ -686,7 +705,7 @@ func (s *state) millionaire_Decryption() {
 
 		// create proof and add it to proof list
 		ts, r := zkp.DiscreteLogEquality(s.myPrivateKey, gs, *zkp.P, *zkp.Q)
-		log.Printf("Creating proof.\nBases=%v\nExponent=%v\nTs=%vn,R=%v\n", gs, s.myPrivateKey, ts, r)
+		// log.Printf("Creating proof.\nBases=%v\nExponent=%v\nTs=%vn,R=%v\n", gs, s.myPrivateKey, ts, r)
 
 		var proof pb.DiscreteLogEquality
 		for _, t := range ts {
@@ -704,7 +723,8 @@ func (s *state) millionaire_Decryption() {
 
 	// Publish public key to all clients
 	for _, client := range clients {
-		log.Println("Sending exponentiated phis... %v", s.myPhis.Phis)
+		client := client
+		// log.Println("Sending exponentiated phis... %v", s.myPhis.Phis)
 		go func() {
 			// Needs to be a goroutine because otherwise we block waiting for a response
 			_, err := client.MillionaireDecryptionInfo(context.Background(),
@@ -729,8 +749,9 @@ func (s *state) millionaire_Decryption() {
 	// Calculate the final shit (division + which one is bigger)
 	for j := 0; j < int(zkp.K_Mill); j++ {
 		v := millionaire.MillionaireCalculateV(s.myExponentiatedGammasDeltas.Gammas[j], s.theirExponentiatedGammasDelta.Gammas[j], s.myPhis.Phis[j], s.theirPhis.Phis[j], *zkp.P)
+		log.Printf("v_%v = %v\n", j, v)
 		if v.Cmp(zkp.One) == 0 {
-		   log.Fatalf("ID 0 is the winner\n")
+			log.Fatalf("ID 0 is the winner\n")
 		}
 	}
 	log.Fatalf("ID 1 is the winner\n")

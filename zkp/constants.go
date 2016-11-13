@@ -16,7 +16,7 @@ var G = big.NewInt(19044154)
 // TODO millionaire specific
 // TODO different than G LOL
 var Y_Mill = big.NewInt(19044154)
-var K_Mill uint = 2
+var K_Mill uint = 3
 
 var One = big.NewInt(1)
 var Two = big.NewInt(2)
