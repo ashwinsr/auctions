@@ -5,12 +5,11 @@ import (
 )
 
 type Ciphertext struct {
-	alpha big.Int
-	beta  big.Int
+	Alpha big.Int
+	Beta  big.Int
 }
 
 type Permutation struct {
 	forward  []int
 	backward []int
 }
-

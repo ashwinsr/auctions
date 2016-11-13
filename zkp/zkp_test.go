@@ -121,26 +121,26 @@ func TestVerifiableSecretShuffle(test *testing.T) {
 		fmt.Println(G[i].String())
 	}
 
-	var RegularCiphertexts = []Ciphertext{
-		Ciphertext{
-			alpha: *One,
-			beta:  *FortyTwo,
-		},
-		Ciphertext{
-			alpha: *One,
-			beta:  *One,
-		},
-	}
-	var ShuffledCiphertexts = []Ciphertext{
-		Ciphertext{
-			alpha: *One,
-			beta:  *One,
-		},
-		Ciphertext{
-			alpha: *One,
-			beta:  *FortyTwo,
-		},
-	}
+	// var RegularCiphertexts = []Ciphertext{
+	//   Ciphertext{
+	//     alpha: *One,
+	//     beta:  *FortyTwo,
+	//   },
+	//   Ciphertext{
+	//     alpha: *One,
+	//     beta:  *One,
+	//   },
+	// }
+	// var ShuffledCiphertexts = []Ciphertext{
+	//   Ciphertext{
+	//     alpha: *One,
+	//     beta:  *One,
+	//   },
+	//   Ciphertext{
+	//     alpha: *One,
+	//     beta:  *FortyTwo,
+	//   },
+	// }
 
 	// g := GenerateG(P, Q)
 	// pi := makeRandPerm(len(e))

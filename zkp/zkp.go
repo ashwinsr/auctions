@@ -224,8 +224,8 @@ func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.In
 
 	RR.Rand(RandGen, &q) // TODO: Look at this later
 
-	ER.alpha.Exp(&y, &RR, &p) // This is the encryption E(1; R_R)
-	ER.beta.Exp(&g, &RR, &p)
+	ER.Alpha.Exp(&y, &RR, &p) // This is the encryption E(1; R_R)
+	ER.Beta.Exp(&g, &RR, &p)
 
 	SumDICubed := Zero
 
@@ -234,13 +234,13 @@ func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.In
 
 	for i := 0; i < n; i++ {
 		var temp big.Int
-		temp.Exp(&E[i].alpha, &D[i], &p)
-		ER.alpha.Mul(&ER.alpha, &temp)
-		ER.alpha.Mod(&ER.alpha, &p)
+		temp.Exp(&E[i].Alpha, &D[i], &p)
+		ER.Alpha.Mul(&ER.Alpha, &temp)
+		ER.Alpha.Mod(&ER.Alpha, &p)
 
-		temp.Exp(&E[i].beta, &D[i], &p)
-		ER.beta.Mul(&ER.beta, &temp)
-		ER.alpha.Mod(&ER.alpha, &p)
+		temp.Exp(&E[i].Beta, &D[i], &p)
+		ER.Beta.Mul(&ER.Beta, &temp)
+		ER.Alpha.Mod(&ER.Alpha, &p)
 
 		c_i := make([]big.Int, n+2) // TODO: put this outside the for loop
 
@@ -511,81 +511,81 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	return
 }
 
-func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, p big.Int, q big.Int, g big.Int, y big.Int, c []big.Int, cd big.Int, cD big.Int, ER Ciphertext, f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int, yD big.Int, zD big.Int, Z big.Int) {
-
-	h := sha256.New()
-	var t []big.Int
-
-	RHS1_commitment_array := make([]big.Int, n+2)
-	RHS2_commitment_array := make([]big.Int, n+2)
-	LHS1 := cd
-	LHS2 := cD
-	LHS3 := Ciphertext{alpha: *One, beta: *One}
-
-	for i := 0; i < n; i++ {
-		h.Write(c[i].Bytes()[:])
-		t[i].SetBytes(h.Sum(nil))
-		t[i].Mod(&t[i], Lt) // Storing t_i as a random value less than Lt
-		h.Reset()
-
-		var ct big.Int
-		ct.Exp(c[i], t[i])
-		LHS1.Mul(LHS1, &ct)
-		// LHS1.Mod(&LHS1, ) This needs to be figured out
-
-		ct.Mul(t[i], t[i])
-		ct.Exp(c[i], ct) // Modulo issues
-
-		LHS2.Mul(LHS2, &ct)
-		// LHS2.Mod(LHS2, ) This needs to be figured out
-
-		var Ef Ciphertext
-		Ef.alpha.Mul(E[i].alpha, f[i])
-		Ef.beta.Mul(E[i].beta, f[i])
-		LHS3.alpha.Mul(LHS3.alpha, Ef.alpha)
-		LHS3.beta.Mul(LHS3.beta, Ef.beta)
-		// LHS3.alpha.Mod(LHS3.alpha, ) Modulo needs to be figured
-		// LHS3.beta.Mod(LHS3.beta, ) Modulo needs to be figured
-
-		RHS1_commitment_array[i] = f[i]
-		RHS2_commitment_array[i] = F[i]
-
-		var et Ciphertext
-		et.alpha.Mul(e[i].alpha, t[i])
-		et.beta.Mul(e[i].beta, t[i])
-		RHS3.alpha.Mul(RHS3.alpha, et.alpha)
-		RHS3.beta.Mul(RHS3.beta, et.beta)
-
-	}
-
-	RHS3_part.alpha.Exp(&y, &Z, &p) // This is the encryption E(1; R_R)
-	RHS3_part.beta.Exp(&g, &Z, &p)
-
-	RHS3.alpha.Mul(&RHS3.alpha, RHS3_part.alpha)
-	RHS3.beta.Mul(&RHS3.beta, RHS3_part.beta)
-
-	// RHS3.alpha.Mod(RHS3.alpha, ) TODO Modulo
-	// RHS3.beta.Mod(RHS3.beta, ) TODO Modulo
-
-	RHS1_commitment_array[n] = yd
-	RHS2_commitment_array[n] = fD
-
-	RHS1_commitment_array[n+1] = fd
-	RHS2_commitment_array[n+1] = yD
-
-	RHS1 := CreateCommitment(RHS1_commitment_array, zd)
-	RHS2 := CreateCommitment(RHS2_commitment_array, zD)
-
-	if LHS1.Cmp(&RHS1) != 0 {
-		err = fmt.Errorf("Verifiable Random Shuffle Step 1 WRONG! LHS %v, RHS %v.\n", LHS1, RHS1)
-	}
-
-	if LHS2.Cmp(&RHS2) != 0 {
-		err = fmt.Errorf("Verifiable Random Shuffle Step 2 WRONG! LHS %v, RHS %v.\n", LHS2, RHS2)
-	}
-
-	if LHS3.alpha.Cmp(&RHS3.alpha) != 0 || LHS3.beta.Cmp(&RHS3.beta) != 0 {
-		err = fmt.Errorf("Verifiable Random Shuffle Step 3 WRONG! LHS %v, RHS %v.\n", LHS3.alpha, RHS3.alpha)
-	}
-
-}
+// func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, p big.Int, q big.Int, g big.Int, y big.Int, c []big.Int, cd big.Int, cD big.Int, ER Ciphertext, f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int, yD big.Int, zD big.Int, Z big.Int) {
+//
+//   h := sha256.New()
+//   var t []big.Int
+//
+//   RHS1_commitment_array := make([]big.Int, n+2)
+//   RHS2_commitment_array := make([]big.Int, n+2)
+//   LHS1 := cd
+//   LHS2 := cD
+//   LHS3 := Ciphertext{alpha: *One, beta: *One}
+//
+//   for i := 0; i < n; i++ {
+//     h.Write(c[i].Bytes()[:])
+//     t[i].SetBytes(h.Sum(nil))
+//     t[i].Mod(&t[i], Lt) // Storing t_i as a random value less than Lt
+//     h.Reset()
+//
+//     var ct big.Int
+//     ct.Exp(c[i], t[i])
+//     LHS1.Mul(LHS1, &ct)
+//     // LHS1.Mod(&LHS1, ) This needs to be figured out
+//
+//     ct.Mul(t[i], t[i])
+//     ct.Exp(c[i], ct) // Modulo issues
+//
+//     LHS2.Mul(LHS2, &ct)
+//     // LHS2.Mod(LHS2, ) This needs to be figured out
+//
+//     var Ef Ciphertext
+//     Ef.Alpha.Mul(E[i].Alpha, f[i])
+//     Ef.Beta.Mul(E[i].Beta, f[i])
+//     LHS3.Alpha.Mul(LHS3.Alpha, Ef.Alpha)
+//     LHS3.Beta.Mul(LHS3.Beta, Ef.Beta)
+//     // LHS3.Alpha.Mod(LHS3.Alpha, ) Modulo needs to be figured
+//     // LHS3.Beta.Mod(LHS3.Beta, ) Modulo needs to be figured
+//
+//     RHS1_commitment_array[i] = f[i]
+//     RHS2_commitment_array[i] = F[i]
+//
+//     var et Ciphertext
+//     et.Alpha.Mul(e[i].Alpha, t[i])
+//     et.Beta.Mul(e[i].Beta, t[i])
+//     RHS3.Alpha.Mul(RHS3.Alpha, et.Alpha)
+//     RHS3.Beta.Mul(RHS3.Beta, et.Beta)
+//
+//   }
+//
+//   RHS3_part.Alpha.Exp(&y, &Z, &p) // This is the encryption E(1; R_R)
+//   RHS3_part.Beta.Exp(&g, &Z, &p)
+//
+//   RHS3.Alpha.Mul(&RHS3.Alpha, RHS3_part.Alpha)
+//   RHS3.Beta.Mul(&RHS3.Beta, RHS3_part.Beta)
+//
+//   // RHS3.Alpha.Mod(RHS3.Alpha, ) TODO Modulo
+//   // RHS3.Beta.Mod(RHS3.Beta, ) TODO Modulo
+//
+//   RHS1_commitment_array[n] = yd
+//   RHS2_commitment_array[n] = fD
+//
+//   RHS1_commitment_array[n+1] = fd
+//   RHS2_commitment_array[n+1] = yD
+//
+//   RHS1 := CreateCommitment(RHS1_commitment_array, zd)
+//   RHS2 := CreateCommitment(RHS2_commitment_array, zD)
+//
+//   if LHS1.Cmp(&RHS1) != 0 {
+//     err = fmt.Errorf("Verifiable Random Shuffle Step 1 WRONG! LHS %v, RHS %v.\n", LHS1, RHS1)
+//   }
+//
+//   if LHS2.Cmp(&RHS2) != 0 {
+//     err = fmt.Errorf("Verifiable Random Shuffle Step 2 WRONG! LHS %v, RHS %v.\n", LHS2, RHS2)
+//   }
+//
+//   if LHS3.Alpha.Cmp(&RHS3.Alpha) != 0 || LHS3.Beta.Cmp(&RHS3.Beta) != 0 {
+//     err = fmt.Errorf("Verifiable Random Shuffle Step 3 WRONG! LHS %v, RHS %v.\n", LHS3.Alpha, RHS3.Alpha)
+//   }
+//
+// }
