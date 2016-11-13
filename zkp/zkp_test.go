@@ -1,6 +1,7 @@
 package zkp
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -8,7 +9,7 @@ import (
 
 // func ReEncryptElGamal(alpha big.Int, beta big.Int, R big.Int y big.Int) (alpha big.Int, beta big.Int) {
 // 	var alphaZero, betaZero big.Int
-  
+
 // }
 
 func TestDiscreteLogKnowledge(test *testing.T) {
@@ -104,44 +105,48 @@ func TestEncryptedValueIsOneOfTwo(test *testing.T) {
 	}
 }
 
-func makeRandPerm(n int) (Permutation) {
- 	perm := rand.Perm(n)
- 	var revperm []int
- 	for i := 0; i < n; i++ {
- 		revperm[perm[i]] = i
- 	}
- 	return Permutation{forward: perm, backward: revperm}
- } 
+func makeRandPerm(n int) Permutation {
+	perm := rand.Perm(n)
+	var revperm []int
+	for i := 0; i < n; i++ {
+		revperm[perm[i]] = i
+	}
+	return Permutation{forward: perm, backward: revperm}
+}
 
-// func TestVerifiableSecretShuffle(test *testing.T) {
+func TestVerifiableSecretShuffle(test *testing.T) {
+	G := GenerateGsCommitment(10)
 
-// 	var RegularCiphertexts = []Ciphertext { 
-//  	   Ciphertext {
-// 	        alpha: *One, 
-// 	        beta: *FortyTwo, 
-// 	    },
-// 	    Ciphertext {
-// 	        alpha: *One, 
-// 	        beta: *One, 
-// 	    },
-// 	}
-// 	var ShuffledCiphertexts = []Ciphertext { 
-//  	   Ciphertext {
-// 	        alpha: *One, 
-// 	        beta: *One, 
-// 	    },
-// 	    Ciphertext {
-// 	        alpha: *One, 
-// 	        beta: *FortyTwo, 
-// 	    },
-// 	}
+	for i := 0; i < 10; i++ {
+		fmt.Println(G[i].String())
+	}
 
-// 	g := GenerateG(P, Q)
-// 	pi := makeRandPerm(len(e))
+	var RegularCiphertexts = []Ciphertext{
+		Ciphertext{
+			alpha: *One,
+			beta:  *FortyTwo,
+		},
+		Ciphertext{
+			alpha: *One,
+			beta:  *One,
+		},
+	}
+	var ShuffledCiphertexts = []Ciphertext{
+		Ciphertext{
+			alpha: *One,
+			beta:  *One,
+		},
+		Ciphertext{
+			alpha: *One,
+			beta:  *FortyTwo,
+		},
+	}
 
-// 	c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z := VerifiableSecretShuffle(RegularCiphertexts, ShuffledCiphertexts, *One, g, *P, *Q, pi, R []big.Int)	
-	
-// 	err := CheckVerifiableSecretShuffle(e, E, p, q, g, y, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
+	// g := GenerateG(P, Q)
+	// pi := makeRandPerm(len(e))
 
+	// c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z := VerifiableSecretShuffle(RegularCiphertexts, ShuffledCiphertexts, *One, g, *P, *Q, pi, R []big.Int)
 
-// }
+	// err := CheckVerifiableSecretShuffle(e, E, p, q, g, y, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
+
+}
