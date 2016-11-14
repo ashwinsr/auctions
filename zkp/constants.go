@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const NumTests = 200
+const NumTests = 10
 
 // TODO err... too small?
 var P = big.NewInt(34531109)

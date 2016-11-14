@@ -1,16 +1,11 @@
 package zkp
 
 import (
-	"fmt"
+	// "fmt"
 	"math/big"
 	"math/rand"
 	"testing"
 )
-
-// func ReEncryptElGamal(alpha big.Int, beta big.Int, R big.Int y big.Int) (alpha big.Int, beta big.Int) {
-// 	var alphaZero, betaZero big.Int
-
-// }
 
 func TestDiscreteLogKnowledge(test *testing.T) {
 	for i := 0; i < NumTests; i++ {
@@ -108,18 +103,59 @@ func TestEncryptedValueIsOneOfTwo(test *testing.T) {
 func makeRandPerm(n int) Permutation {
 	perm := rand.Perm(n)
 	var revperm []int
+	revperm = make([]int, n)
+
 	for i := 0; i < n; i++ {
 		revperm[perm[i]] = i
 	}
-	return Permutation{forward: perm, backward: revperm}
+	return Permutation{Forward: perm, Backward: revperm}
 }
 
 func TestVerifiableSecretShuffle(test *testing.T) {
-	G := GenerateGsCommitment(10)
+	for i := 0; i < NumTests; i++ {
+		var e, E []Ciphertext
+		var x, y, r, m big.Int
+		var R []big.Int
 
-	for i := 0; i < 10; i++ {
-		fmt.Println(G[i].String())
+		g := GenerateG(P, Q)
+
+		// Generate private key, public key pair
+		x.Rand(RandGen, Q) // x = rand() mod Q // TODO also shouldn't be 0
+		y.Exp(&g, &x, P)   // y = g^x mod P
+
+		n := 10
+
+		for j := 0; j < n; j++ {
+			m.Rand(RandGen, P) // Some message
+			r.Rand(RandGen, Q)
+			c := EncryptElGamal(&m, &r, &y, P, Q, &g)
+			e = append(e, c)
+		}
+
+		pi := makeRandPerm(n)
+
+		for j := 0; j < n; j++ {
+			r.Rand(RandGen, Q)
+			cOne := EncryptElGamal(One, &r, &y, P, Q, &g)
+			c := MultiplyElGamal(e[pi.Forward[j]], cOne, P)
+			E = append(E, c)
+			R = append(R, r)
+		}
+
+		c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z := VerifiableSecretShuffle(e, E, y, g, *P, *Q, pi, R)
+		err := CheckVerifiableSecretShuffle(e, E, *P, *Q, g, y, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
+
+		if err != nil {
+			// fmt.Println(err)
+			test.Error(err)
+		}
 	}
+
+	// G := GenerateGsCommitment(10)
+	//
+	// for i := 0; i < 10; i++ {
+	//   fmt.Println(G[i].String())
+	// }
 
 	// var RegularCiphertexts = []Ciphertext{
 	//   Ciphertext{

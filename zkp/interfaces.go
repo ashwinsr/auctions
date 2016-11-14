@@ -10,6 +10,6 @@ type Ciphertext struct {
 }
 
 type Permutation struct {
-	forward  []int
-	backward []int
+	Forward  []int
+	Backward []int
 }
