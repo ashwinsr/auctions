@@ -105,7 +105,7 @@ func EncryptedValueIsOneOfTwo(m big.Int, y big.Int, r big.Int, g big.Int, z big.
 	temp_1.Exp(&y, &r, &p)
 	alpha.Mul(&temp_1, &m)
 	alpha.Mod(&alpha, &p) // alpha = m*y^r mod p
-	beta.Exp(&g, &r, &p)  // beta = g^r mod p     <- should this be mod q?????/
+	beta.Exp(&g, &r, &p)  // beta = g^r mod p
 
 	r_1.Rand(RandGen, &q)
 	r_2.Rand(RandGen, &q)
