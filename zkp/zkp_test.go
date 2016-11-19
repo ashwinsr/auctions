@@ -1,7 +1,9 @@
 package zkp
 
 import (
+	// "fmt"
 	"math/big"
+	"math/rand"
 	"testing"
 )
 
@@ -98,4 +100,91 @@ func TestEncryptedValueIsOneOfTwo(test *testing.T) {
 			test.Error(err)
 		}
 	}
+}
+
+func makeRandPerm(n int) Permutation {
+	perm := rand.Perm(n)
+	var revperm []int
+	revperm = make([]int, n)
+
+	for i := 0; i < n; i++ {
+		revperm[perm[i]] = i
+	}
+	return Permutation{Forward: perm, Backward: revperm}
+}
+
+func TestVerifiableSecretShuffle(test *testing.T) {
+	for i := 0; i < NumTests; i++ {
+		var e, E []Ciphertext
+		var x, y, r, m big.Int
+		var R []big.Int
+
+		g := GenerateG(P, Q)
+
+		// Generate private key, public key pair
+		x.Rand(RandGen, Q) // x = rand() mod Q // TODO also shouldn't be 0
+		y.Exp(&g, &x, P)   // y = g^x mod P
+
+		n := 10
+
+		for j := 0; j < n; j++ {
+			m.Rand(RandGen, P) // Some message
+			r.Rand(RandGen, Q)
+			c := EncryptElGamal(&m, &r, &y, P, Q, &g)
+			e = append(e, c)
+		}
+
+		pi := makeRandPerm(n)
+
+		for j := 0; j < n; j++ {
+			r.Rand(RandGen, Q)
+			cOne := EncryptElGamal(One, &r, &y, P, Q, &g)
+			c := MultiplyElGamal(e[pi.Forward[j]], cOne, P)
+			E = append(E, c)
+			R = append(R, r)
+		}
+
+		c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z := VerifiableSecretShuffle(e, E, y, g, *P, *Q, pi, R)
+		err := CheckVerifiableSecretShuffle(e, E, *P, *Q, g, y, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
+
+		if err != nil {
+			// fmt.Println(err)
+			test.Error(err)
+		}
+	}
+
+	// G := GenerateGsCommitment(10)
+	//
+	// for i := 0; i < 10; i++ {
+	//   fmt.Println(G[i].String())
+	// }
+
+	// var RegularCiphertexts = []Ciphertext{
+	//   Ciphertext{
+	//     alpha: *One,
+	//     beta:  *FortyTwo,
+	//   },
+	//   Ciphertext{
+	//     alpha: *One,
+	//     beta:  *One,
+	//   },
+	// }
+	// var ShuffledCiphertexts = []Ciphertext{
+	//   Ciphertext{
+	//     alpha: *One,
+	//     beta:  *One,
+	//   },
+	//   Ciphertext{
+	//     alpha: *One,
+	//     beta:  *FortyTwo,
+	//   },
+	// }
+
+	// g := GenerateG(P, Q)
+	// pi := makeRandPerm(len(e))
+
+	// c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z := VerifiableSecretShuffle(RegularCiphertexts, ShuffledCiphertexts, *One, g, *P, *Q, pi, R []big.Int)
+
+	// err := CheckVerifiableSecretShuffle(e, E, p, q, g, y, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
+
 }
