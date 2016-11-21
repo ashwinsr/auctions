@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	// "fmt"
+	"fmt"
 	"log"
 	"math/big"
 	"net"
@@ -17,6 +17,7 @@ import (
 	"github.com/ashwinsr/auctions/zkp"
 	google_protobuf "github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/credentials"
 
 	// "net/http"
 	_ "net/http/pprof"
@@ -282,7 +283,13 @@ func runServer(localHost string) {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	s := grpc.NewServer()
+
+	// Get options
+	var opts []grpc.ServerOption
+	cert := getServerCertificate()
+	opts = []grpc.ServerOption{grpc.Creds(cert)}
+
+	s := grpc.NewServer(opts...)
 	pb.RegisterZKPAuctionServer(s, &server{})
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
@@ -306,8 +313,28 @@ func getHosts() []string {
 	return hosts.Hosts
 }
 
-func initClients(hosts []string, myAddr string) {
+func getClientCertificate() credentials.TransportCredentials {
+    certFile := fmt.Sprintf("certs/%v.pem", *id)
+    cert, err := credentials.NewClientTLSFromFile(certFile, "")
+    if err != nil {
+	    log.Fatalf("Could not load client TLS certificate: %v", err)
+	}
 
+	return cert
+}
+
+func getServerCertificate() credentials.TransportCredentials {
+	 certFile := fmt.Sprintf("certs/%v.pem", *id)
+	 keyFile := fmt.Sprintf("certs/%v.key", *id)
+	 cert, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+	 if err != nil {
+	     log.Fatalf("Could not load server TLS certificate: %v", err)
+	 }
+
+	 return cert
+}
+
+func initClients(hosts []string, myAddr string) {
 	// initialize channels with correct amount of buffer space
 	canReceiveKeys = make(chan struct{}, len(hosts))
 	canReceiveAlphaBeta = make(chan struct{}, len(hosts))
@@ -319,8 +346,18 @@ func initClients(hosts []string, myAddr string) {
 		if host == myAddr {
 			continue
 		}
+
+		// Get certificate
+		cert := getClientCertificate()
+
+		// Configure options to Dial
+		var opts []grpc.DialOption
+		opts = append(opts, grpc.WithTransportCredentials(cert))
+		opts = append(opts, grpc.WithBackoffMaxDelay(1*time.Second))
+		opts = append(opts, grpc.WithBlock())
+
 		// Set up a connection to the server.
-		conn, err := grpc.Dial(host, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(1*time.Second), grpc.WithBlock())
+		conn, err := grpc.Dial(host, opts...)
 		if err != nil {
 			log.Fatalf("Did not connect (to host %v): %v", host, err)
 		}
