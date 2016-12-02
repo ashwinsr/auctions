@@ -102,16 +102,6 @@ func TestEncryptedValueIsOneOfTwo(test *testing.T) {
 	}
 }
 
-func makeRandPerm(n int) Permutation {
-	perm := rand.Perm(n)
-	var revperm []int
-	revperm = make([]int, n)
-
-	for i := 0; i < n; i++ {
-		revperm[perm[i]] = i
-	}
-	return Permutation{Forward: perm, Backward: revperm}
-}
 
 func TestVerifiableSecretShuffle(test *testing.T) {
 	for i := 0; i < NumTests; i++ {
@@ -134,7 +124,7 @@ func TestVerifiableSecretShuffle(test *testing.T) {
 			e = append(e, c)
 		}
 
-		pi := makeRandPerm(n)
+		pi := MakeRandPerm(n)
 
 		for j := 0; j < n; j++ {
 			r.Rand(RandGen, Q)
@@ -152,39 +142,5 @@ func TestVerifiableSecretShuffle(test *testing.T) {
 			test.Error(err)
 		}
 	}
-
-	// G := GenerateGsCommitment(10)
-	//
-	// for i := 0; i < 10; i++ {
-	//   fmt.Println(G[i].String())
-	// }
-
-	// var RegularCiphertexts = []Ciphertext{
-	//   Ciphertext{
-	//     alpha: *One,
-	//     beta:  *FortyTwo,
-	//   },
-	//   Ciphertext{
-	//     alpha: *One,
-	//     beta:  *One,
-	//   },
-	// }
-	// var ShuffledCiphertexts = []Ciphertext{
-	//   Ciphertext{
-	//     alpha: *One,
-	//     beta:  *One,
-	//   },
-	//   Ciphertext{
-	//     alpha: *One,
-	//     beta:  *FortyTwo,
-	//   },
-	// }
-
-	// g := GenerateG(P, Q)
-	// pi := makeRandPerm(len(e))
-
-	// c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z := VerifiableSecretShuffle(RegularCiphertexts, ShuffledCiphertexts, *One, g, *P, *Q, pi, R []big.Int)
-
-	// err := CheckVerifiableSecretShuffle(e, E, p, q, g, y, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
 
 }

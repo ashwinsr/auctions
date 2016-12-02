@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math/big"
+	"math/rand"
 )
 
 /*
@@ -23,6 +24,17 @@ func ComputeCSingle(g big.Int, y big.Int, t big.Int, q big.Int) (c big.Int) {
 	c.Mod(&c, &q) // c = c mod q
 
 	return c
+}
+
+func MakeRandPerm(n int) Permutation {
+	perm := rand.Perm(n)
+	var revperm []int
+	revperm = make([]int, n)
+
+	for i := 0; i < n; i++ {
+		revperm[perm[i]] = i
+	}
+	return Permutation{Forward: perm, Backward: revperm}
 }
 
 // DiscreteLogKnowledge generates a ZKP of the knowledge of a discrete

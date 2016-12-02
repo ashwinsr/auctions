@@ -74,7 +74,18 @@ message EqualsOneOfTwo {
 }
 
 message VerifiableShuffle {
-  // EMPTY COZ ANUNAY IS SLOW
+  repeated bytes c = 1;
+  bytes cd = 2;
+  bytes cD = 3;
+  bytes ER = 4;
+  repeated bytes f = 5;
+  bytes fd = 6;
+  bytes yd = 7;
+  bytes zd = 8;
+  repeated bytes F = 9;
+  bytes yD = 10;
+  bytes zD = 11;
+  bytes Z = 12;
 }
 
 message DiscreteLogEquality {

@@ -583,10 +583,55 @@ func (s *state) millionaire_MixOutput1() {
 	s.theirGammasDeltas = gds
 
 	log.Printf("Gammas/deltas: %v\n", gds)
+
+	if *id == 0 {
+		var e, E []zkp.Ciphertext
+		var R []big.Int
+		var r big.Int
+
+		for j := 0; uint(j) < zkp.K_Mill; j++ {
+			e[j].Alpha = gds.Gammas[j]
+			e[j].Beta = gds.Deltas[j]
+		}
+
+		pi := zkp.MakeRandPerm(int(zkp.K_Mill))
+
+		for j := 0; uint(j) < zkp.K_Mill; j++ {
+			r.Rand(zkp.RandGen, zkp.Q)
+			cOne := zkp.EncryptElGamal(zkp.One, &r, zkp.Y_Mill, zkp.P, zkp.Q, zkp.G)
+			c := zkp.MultiplyElGamal(e[pi.Forward[j]], cOne, zkp.P)
+			E = append(E, c)
+			R = append(R, r)
+		}
+
+		c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z := zkp.VerifiableSecretShuffle(e, E, *zkp.Y_Mill, *zkp.G, *zkp.P, *zkp.Q, pi, R)
+		err := zkp.CheckVerifiableSecretShuffle(e, E, *zkp.P, *zkp.Q, *zkp.G, *zkp.Y_Mill, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
+		
+		if err != nil {
+			log.Printf("YAY VERIFIABLY SHUFFLED")
+		} else {
+			log.Printf("YAY DIDN'T VERIFIABLY SHUFFLED")
+		}
+	}
+
+	// var proof pb.VerifiableShuffle
+	// proof.
+	
+	// for _, t := range ts {
+	// 	proof.Ts = append(proof.Ts, t.Bytes())
+	// }
+
+	// // log.Println("Beginning random exponentiation6")
+	// proof.R = r.Bytes()
+	// proofs = append(proofs, &proof)
+
+
 }
 
 func (s *state) millionaire_MixOutput2() {
-	// no-op for now
+	// if *id == 1 {
+	
+	// }
 }
 
 // Takes gamme and delta to a random exponent, proves the equality of the exponent (logarithm)
