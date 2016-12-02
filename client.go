@@ -40,6 +40,7 @@ type state struct {
 	myPublicKey  big.Int
 	keys         []big.Int
 	publicKey    big.Int
+	currRound    int
 
 	// TODO millionaire specific
 	myAlphasBetas                 *AlphaBetaStruct
@@ -62,8 +63,14 @@ var myState *state
  * onto the next round, just wait in the channel until we are ready.
  */
 var (
-	clients        []pb.ZKPAuctionClient
-	keyChan        chan big.Int = make(chan big.Int) // TODO bother with buffer?
+	clients []pb.ZKPAuctionClient
+	keyChan chan big.Int = make(chan big.Int) // TODO bother with buffer?
+
+	// Publish
+	isReady      chan struct{}
+	receivedChan chan pb.Result = make(chan pb.Result)
+	checkedChan  chan pb.Result = make(chan pb.Result)
+
 	canReceiveKeys chan struct{}
 
 	// TODO millionaire specific
@@ -91,77 +98,12 @@ var (
 // server is used to implement pb.ZKPAuctionServer
 type server struct{}
 
-// SendKey implements pb.ZKPAuctionServer
-func (s *server) SendKey(ctx context.Context, in *pb.Key) (*google_protobuf.Empty, error) {
+func (s *server) Publish(ctx context.Context, in *pb.Result) (*google_protobuf.Empty, error) {
 	go func() {
-		// log.Printf("Starting to receive, waiting on channel\n")
-		// wait until we can receive keys
-		<-canReceiveKeys
-		// log.Printf("Done waiting on channel!!!!!")
+		// Wait until we are ready
+		<-isReady
 
-		var key, t, r big.Int
-		key.SetBytes(in.Key) // TODO this how you access Key? Or GetKey()
-		t.SetBytes(in.GetProof().T)
-		r.SetBytes(in.GetProof().R)
-
-		// log.Printf("Received key: %v\n", key)
-
-		if err := zkp.CheckDiscreteLogKnowledgeProof(*zkp.G, key, t, r, *zkp.P, *zkp.Q); err != nil {
-			log.Fatalf("Received incorrect zero-knowledge proof. Key=%v, t=%v, r=%v", key, t, r)
-		}
-
-		// put key into keyChan in a goroutine, as we want to return as soon as possible
-		// go func() {
-		keyChan <- key
-		// }()
-	}()
-
-	return &google_protobuf.Empty{}, nil
-}
-
-// TODO millionaire specific
-// MillionaireAlphaBeta implements pb.ZKPAuctionServer
-func (s *server) MillionaireAlphaBeta(ctx context.Context, in *pb.AlphaBeta) (*google_protobuf.Empty, error) {
-	go func() {
-		// wait until we can receive alphas and betas
-		<-canReceiveAlphaBeta
-
-		if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != zkp.K_Mill {
-			log.Fatalf("Incorrect number of shit")
-		}
-
-		var abs AlphaBetaStruct
-
-		for i := 0; i < len(in.Alphas); i++ {
-			var alpha, beta, a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 big.Int
-			alpha.SetBytes(in.Alphas[i])
-			beta.SetBytes(in.Betas[i])
-			a_1.SetBytes(in.Proofs[i].A_1)
-			a_2.SetBytes(in.Proofs[i].A_2)
-			b_1.SetBytes(in.Proofs[i].B_1)
-			b_2.SetBytes(in.Proofs[i].B_2)
-			d_1.SetBytes(in.Proofs[i].D_1)
-			d_2.SetBytes(in.Proofs[i].D_2)
-			r_1.SetBytes(in.Proofs[i].R_1)
-			r_2.SetBytes(in.Proofs[i].R_2)
-
-			if err := zkp.CheckEncryptedValueIsOneOfTwo(alpha, beta, *zkp.P, *zkp.Q,
-				a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2,
-				*zkp.G, myState.publicKey, *zkp.Y_Mill); err != nil {
-				log.Fatalf("Received incorrect zero-knowledge proof for alpha/beta")
-			}
-			// TODO change to pass protobuf structs
-			abs.alphas = append(abs.alphas, alpha)
-			abs.betas = append(abs.betas, beta)
-		}
-
-		// TODO debugging
-		// log.Printf("Received Alphas: %v", abs.alphas)
-		// log.Printf("Received Betas: %v", abs.betas)
-
-		// go func() {
-		alphaBetaChan <- &abs
-		// }()
+		receivedChan <- *in
 	}()
 
 	return &google_protobuf.Empty{}, nil
@@ -314,27 +256,30 @@ func getHosts() []string {
 }
 
 func getClientCertificate() credentials.TransportCredentials {
-    certFile := fmt.Sprintf("certs/%v.pem", *id)
-    cert, err := credentials.NewClientTLSFromFile(certFile, "")
-    if err != nil {
-	    log.Fatalf("Could not load client TLS certificate: %v", err)
+	certFile := fmt.Sprintf("certs/%v.pem", *id)
+	cert, err := credentials.NewClientTLSFromFile(certFile, "")
+	if err != nil {
+		log.Fatalf("Could not load client TLS certificate: %v", err)
 	}
 
 	return cert
 }
 
 func getServerCertificate() credentials.TransportCredentials {
-	 certFile := fmt.Sprintf("certs/%v.pem", *id)
-	 keyFile := fmt.Sprintf("certs/%v.key", *id)
-	 cert, err := credentials.NewServerTLSFromFile(certFile, keyFile)
-	 if err != nil {
-	     log.Fatalf("Could not load server TLS certificate: %v", err)
-	 }
+	certFile := fmt.Sprintf("certs/%v.pem", *id)
+	keyFile := fmt.Sprintf("certs/%v.key", *id)
+	cert, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+	if err != nil {
+		log.Fatalf("Could not load server TLS certificate: %v", err)
+	}
 
-	 return cert
+	return cert
 }
 
 func initClients(hosts []string, myAddr string) {
+
+	isReady = make(chan struct{}, len(hosts))
+
 	// initialize channels with correct amount of buffer space
 	canReceiveKeys = make(chan struct{}, len(hosts))
 	canReceiveAlphaBeta = make(chan struct{}, len(hosts))
@@ -382,10 +327,10 @@ func main() {
 
 	initClients(hosts, myAddr)
 
-	myState.keyDistribution()
+	myState.round1()
 
 	// TODO millionaire specific shit
-	myState.millionaire_AlphaBetaDistribute()
+	myState.round2()
 	myState.millionaire_MixOutput1()
 	myState.millionaire_MixOutput2()
 	myState.millionaire_RandomizeOutput()
@@ -396,6 +341,93 @@ func main() {
 	}
 }
 
+func (s *state) publishAll(result *pb.Result) {
+	// Signal to all receivers that we can receive now
+	for i := 0; i < len(clients); i++ {
+		isReady <- struct{}{}
+	}
+
+	// Publish data to all clients
+	for _, client := range clients {
+		// log.Println("Sending data to client...")
+		client := client
+		go func() {
+			// Needs to be a goroutine because otherwise we block waiting for a response
+			_, err := client.Publish(context.Background(), result)
+			if err != nil {
+				log.Fatalf("Error on sending data: %v", err)
+			}
+		}()
+	}
+}
+
+func (s *state) checkAll(check CheckFn) {
+	for i := 0; i < len(clients); i++ {
+		result := <-receivedChan
+		go func() {
+			err := check(&result)
+			if err == nil {
+				checkedChan <- result
+			}
+		}()
+	}
+}
+
+type CheckFn func(*pb.Result) error
+
+func (s *state) checkRound1(result *pb.Result) (err error) {
+	var key, t, r big.Int
+
+	key.SetBytes(result.Key.Key) // TODO this how you access Key? Or GetKey()
+	t.SetBytes(result.Key.GetProof().T)
+	r.SetBytes(result.Key.GetProof().R)
+
+	err = zkp.CheckDiscreteLogKnowledgeProof(*zkp.G, key, t, r, *zkp.P, *zkp.Q)
+
+	if err != nil {
+		log.Fatalf("Received incorrect zero-knowledge proof. Key=%v, t=%v, r=%v", key, t, r)
+	}
+
+	return
+}
+
+func (s *state) checkRound2(result *pb.Result) (err error) {
+	in := result.AlphaBeta
+
+	if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != zkp.K_Mill {
+		log.Fatalf("Incorrect number of shit")
+	}
+
+	var abs AlphaBetaStruct
+
+	for i := 0; i < len(in.Alphas); i++ {
+		var alpha, beta, a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 big.Int
+		alpha.SetBytes(in.Alphas[i])
+		beta.SetBytes(in.Betas[i])
+		a_1.SetBytes(in.Proofs[i].A_1)
+		a_2.SetBytes(in.Proofs[i].A_2)
+		b_1.SetBytes(in.Proofs[i].B_1)
+		b_2.SetBytes(in.Proofs[i].B_2)
+		d_1.SetBytes(in.Proofs[i].D_1)
+		d_2.SetBytes(in.Proofs[i].D_2)
+		r_1.SetBytes(in.Proofs[i].R_1)
+		r_2.SetBytes(in.Proofs[i].R_2)
+
+		if err := zkp.CheckEncryptedValueIsOneOfTwo(alpha, beta, *zkp.P, *zkp.Q,
+			a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2,
+			*zkp.G, s.publicKey, *zkp.Y_Mill); err != nil {
+			log.Fatalf("Received incorrect zero-knowledge proof for alpha/beta")
+		}
+
+		// TODO change to pass protobuf structs
+		abs.alphas = append(abs.alphas, alpha)
+		abs.betas = append(abs.betas, beta)
+		log.Printf("ABS: %v %v\n", abs.alphas, abs.betas)
+	}
+
+	return
+}
+
 /*
  * 1. Generates a private/public key pair
  * 2. Generates zero-knowledge-proof of private key
@@ -404,57 +436,37 @@ func main() {
  * 5. Receives n public keys from keyChan, puts them in state.keys
  * 6. Calculates the final public key, and stores into state.
  */
-func (s *state) keyDistribution() {
-	// log.Println("Beginning key distribution")
-
+func (s *state) round1() {
 	// Generate private key
 	s.myPrivateKey.Rand(zkp.RandGen, zkp.Q)
 	// Calculate public key
 	s.myPublicKey.Exp(zkp.G, &s.myPrivateKey, zkp.P)
 
-	log.Printf("My private key: %v\n", s.myPrivateKey.String())
-	log.Printf("My public key: %v\n", s.myPublicKey.String())
-
 	// Generate zkp of private key
 	t, r := zkp.DiscreteLogKnowledge(s.myPrivateKey, *zkp.G, *zkp.P, *zkp.Q)
 	// Create proto structure of zkp
 	zkpPrivKey := &pb.DiscreteLogKnowledge{T: t.Bytes(), R: r.Bytes()}
-	// log.Printf("Sending t=%v, r=%v", t, r)
 
-	// Signal to all receivers that we can receive now
-	for i := 0; i < len(clients); i++ {
-		canReceiveKeys <- struct{}{}
+	result := pb.Result{
+		Round: 1,
+		Key: &pb.Key{
+			Key:   s.myPublicKey.Bytes(),
+			Proof: zkpPrivKey,
+		},
 	}
 
-	// Publish public key to all clients
-	for _, client := range clients {
-		// log.Println("Sending key to client...")
-		client := client
-		go func() {
-			// Needs to be a goroutine because otherwise we block waiting for a response
-			_, err := client.SendKey(context.Background(),
-				&pb.Key{
-					Key:   s.myPublicKey.Bytes(),
-					Proof: zkpPrivKey,
-				})
-			// log.Println("Sent key to client!!!")
-			if err != nil {
-				log.Fatalf("Error on sending key: %v", err)
-			}
-		}()
-	}
-
-	// log.Println("Done! sending key to client...")
+	s.publishAll(&result)
+	s.checkAll(s.checkRound1)
 
 	s.keys = append(s.keys, s.myPublicKey)
 
 	// Wait for public keys of all other clients
-	// TODO error handling
 	for i := 0; i < len(clients); i++ {
-		s.keys = append(s.keys, <-keyChan)
+		r := <-checkedChan
+		var k big.Int
+		k.SetBytes(r.Key.Key)
+		s.keys = append(s.keys, k)
 	}
-
-	log.Printf("Keys: %v", s.keys)
 
 	// Calculating final public key
 	// TODO SHOULD THIS BE MOD P? Probably doesn't matter, but just for computational practicality
@@ -467,7 +479,7 @@ func (s *state) keyDistribution() {
 	log.Printf("Calculated public key: %v\n", s.publicKey.String())
 }
 
-func (s *state) millionaire_AlphaBetaDistribute() {
+func (s *state) round2() {
 	// Publish alphas and betas to all of the clients
 
 	var alphas, betas [][]byte
@@ -514,12 +526,6 @@ func (s *state) millionaire_AlphaBetaDistribute() {
 			zkp.EncryptedValueIsOneOfTwo(m, s.publicKey, rJ, *zkp.G,
 				*zkp.Y_Mill, *zkp.P, *zkp.Q)
 
-		if err := zkp.CheckEncryptedValueIsOneOfTwo(alphaJ, betaJ, *zkp.P, *zkp.Q,
-			a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2,
-			*zkp.G, myState.publicKey, *zkp.Y_Mill); err != nil {
-			log.Fatalf("WE ARE SENDING AN INCORRECT PROOF")
-		}
-
 		proofs = append(proofs, &pb.EqualsOneOfTwo{
 			A_1: a_1.Bytes(),
 			A_2: a_2.Bytes(),
@@ -532,40 +538,38 @@ func (s *state) millionaire_AlphaBetaDistribute() {
 		})
 	}
 
-	// Signal to all receivers that we can receive now
-	for i := 0; i < len(clients); i++ {
-		canReceiveAlphaBeta <- struct{}{}
+	result := pb.Result{
+		Round: 2,
+		AlphaBeta: &pb.AlphaBeta{
+			Alphas: alphas,
+			Betas:  betas,
+			Proofs: proofs,
+		},
 	}
 
-	for _, client := range clients {
-		client := client
-		// log.Println("Sending alpha, beta to client...")
-		// log.Printf("Sending alphas: %v\n", alphas)
-		// log.Printf("Sending betas: %v\n", betas)
-		go func() {
-			_, err := client.MillionaireAlphaBeta(context.Background(),
-				&pb.AlphaBeta{
-					Alphas: alphas,
-					Betas:  betas,
-					Proofs: proofs,
-				})
-			if err != nil {
-				log.Fatalf("Error on sending alpha, beta: %v", err)
-			}
-		}()
-	}
+	s.publishAll(&result)
+	s.checkAll(s.checkRound2)
 
 	s.myAlphasBetas = &AlphaBetaStruct{
 		alphas: alphasInts,
 		betas:  betasInts,
 	}
 
+	s.theirAlphasBetas = &AlphaBetaStruct{}
+
 	// Wait for alphas and betas of other client
 	// TODO len should just be 1
 	// TODO error handling
 	for i := 0; i < len(clients); i++ {
-		s.theirAlphasBetas = <-alphaBetaChan
+		r := <-checkedChan
+		alphaBeta := r.AlphaBeta
+		for j := 0; j < len(alphaBeta.Alphas); j++ {
+			s.theirAlphasBetas.alphas = append(s.theirAlphasBetas.alphas, *new(big.Int).SetBytes(alphaBeta.Alphas[j]))
+			s.theirAlphasBetas.betas = append(s.theirAlphasBetas.betas, *new(big.Int).SetBytes(alphaBeta.Betas[j]))
+		}
 	}
+
+	log.Printf("theirAlphasBetas: %v %v\n", s.theirAlphasBetas.alphas, s.theirAlphasBetas.betas)
 }
 
 func (s *state) millionaire_MixOutput1() {

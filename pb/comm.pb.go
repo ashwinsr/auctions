@@ -42,6 +42,18 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
+// The result of computation for each node after every round
+type Result struct {
+	Round     int32      `protobuf:"varint,1,opt,name=round" json:"round,omitempty"`
+	Key       *Key       `protobuf:"bytes,2,opt,name=key" json:"key,omitempty"`
+	AlphaBeta *AlphaBeta `protobuf:"bytes,3,opt,name=alphabeta" json:"alphabeta,omitempty"`
+}
+
+func (m *Result) Reset()                    { *m = Result{} }
+func (m *Result) String() string            { return proto.CompactTextString(m) }
+func (*Result) ProtoMessage()               {}
+func (*Result) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+
 // The request message containing the user's name.
 type Key struct {
 	Key []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
@@ -181,6 +193,7 @@ func (*DiscreteLogEquality) ProtoMessage()               {}
 func (*DiscreteLogEquality) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
 
 func init() {
+	proto.RegisterType((*Result)(nil), "pb.Result")
 	proto.RegisterType((*Key)(nil), "pb.Key")
 	proto.RegisterType((*AlphaBeta)(nil), "pb.AlphaBeta")
 	proto.RegisterType((*MixedOutput)(nil), "pb.MixedOutput")
@@ -203,10 +216,9 @@ const _ = grpc.SupportPackageIsVersion3
 // Client API for ZKPAuction service
 
 type ZKPAuctionClient interface {
-	// Sends a key
-	SendKey(ctx context.Context, in *Key, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
+	Publish(ctx context.Context, in *Result, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
+
 	// TODO millionaire specific
-	MillionaireAlphaBeta(ctx context.Context, in *AlphaBeta, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
 	MillionaireGammaDelta1(ctx context.Context, in *MixedOutput, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
 	MillionaireGammaDelta2(ctx context.Context, in *MixedOutput, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
 	MillionaireRandomizeOutput(ctx context.Context, in *RandomizedOutput, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
@@ -221,18 +233,9 @@ func NewZKPAuctionClient(cc *grpc.ClientConn) ZKPAuctionClient {
 	return &zKPAuctionClient{cc}
 }
 
-func (c *zKPAuctionClient) SendKey(ctx context.Context, in *Key, opts ...grpc.CallOption) (*google_protobuf.Empty, error) {
+func (c *zKPAuctionClient) Publish(ctx context.Context, in *Result, opts ...grpc.CallOption) (*google_protobuf.Empty, error) {
 	out := new(google_protobuf.Empty)
-	err := grpc.Invoke(ctx, "/pb.ZKPAuction/SendKey", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *zKPAuctionClient) MillionaireAlphaBeta(ctx context.Context, in *AlphaBeta, opts ...grpc.CallOption) (*google_protobuf.Empty, error) {
-	out := new(google_protobuf.Empty)
-	err := grpc.Invoke(ctx, "/pb.ZKPAuction/MillionaireAlphaBeta", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/pb.ZKPAuction/Publish", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -278,10 +281,9 @@ func (c *zKPAuctionClient) MillionaireDecryptionInfo(ctx context.Context, in *De
 // Server API for ZKPAuction service
 
 type ZKPAuctionServer interface {
+	Publish(context.Context, *Result) (*google_protobuf.Empty, error)
 	// Sends a key
-	SendKey(context.Context, *Key) (*google_protobuf.Empty, error)
 	// TODO millionaire specific
-	MillionaireAlphaBeta(context.Context, *AlphaBeta) (*google_protobuf.Empty, error)
 	MillionaireGammaDelta1(context.Context, *MixedOutput) (*google_protobuf.Empty, error)
 	MillionaireGammaDelta2(context.Context, *MixedOutput) (*google_protobuf.Empty, error)
 	MillionaireRandomizeOutput(context.Context, *RandomizedOutput) (*google_protobuf.Empty, error)
@@ -292,38 +294,20 @@ func RegisterZKPAuctionServer(s *grpc.Server, srv ZKPAuctionServer) {
 	s.RegisterService(&_ZKPAuction_serviceDesc, srv)
 }
 
-func _ZKPAuction_SendKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Key)
+func _ZKPAuction_Publish_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Result)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ZKPAuctionServer).SendKey(ctx, in)
+		return srv.(ZKPAuctionServer).Publish(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/pb.ZKPAuction/SendKey",
+		FullMethod: "/pb.ZKPAuction/Publish",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZKPAuctionServer).SendKey(ctx, req.(*Key))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ZKPAuction_MillionaireAlphaBeta_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AlphaBeta)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ZKPAuctionServer).MillionaireAlphaBeta(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/pb.ZKPAuction/MillionaireAlphaBeta",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZKPAuctionServer).MillionaireAlphaBeta(ctx, req.(*AlphaBeta))
+		return srv.(ZKPAuctionServer).Publish(ctx, req.(*Result))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -405,12 +389,8 @@ var _ZKPAuction_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*ZKPAuctionServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "SendKey",
-			Handler:    _ZKPAuction_SendKey_Handler,
-		},
-		{
-			MethodName: "MillionaireAlphaBeta",
-			Handler:    _ZKPAuction_MillionaireAlphaBeta_Handler,
+			MethodName: "Publish",
+			Handler:    _ZKPAuction_Publish_Handler,
 		},
 		{
 			MethodName: "MillionaireGammaDelta1",
