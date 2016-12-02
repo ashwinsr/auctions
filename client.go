@@ -314,24 +314,24 @@ func getHosts() []string {
 }
 
 func getClientCertificate() credentials.TransportCredentials {
-    certFile := fmt.Sprintf("certs/%v.pem", *id)
-    cert, err := credentials.NewClientTLSFromFile(certFile, "")
-    if err != nil {
-	    log.Fatalf("Could not load client TLS certificate: %v", err)
+	certFile := fmt.Sprintf("certs/%v.pem", *id)
+	cert, err := credentials.NewClientTLSFromFile(certFile, "")
+	if err != nil {
+		log.Fatalf("Could not load client TLS certificate: %v", err)
 	}
 
 	return cert
 }
 
 func getServerCertificate() credentials.TransportCredentials {
-	 certFile := fmt.Sprintf("certs/%v.pem", *id)
-	 keyFile := fmt.Sprintf("certs/%v.key", *id)
-	 cert, err := credentials.NewServerTLSFromFile(certFile, keyFile)
-	 if err != nil {
-	     log.Fatalf("Could not load server TLS certificate: %v", err)
-	 }
+	certFile := fmt.Sprintf("certs/%v.pem", *id)
+	keyFile := fmt.Sprintf("certs/%v.key", *id)
+	cert, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+	if err != nil {
+		log.Fatalf("Could not load server TLS certificate: %v", err)
+	}
 
-	 return cert
+	return cert
 }
 
 func initClients(hosts []string, myAddr string) {
@@ -590,8 +590,7 @@ func (s *state) millionaire_MixOutput1() {
 		var r big.Int
 
 		for j := 0; uint(j) < zkp.K_Mill; j++ {
-			e[j].Alpha = gds.Gammas[j]
-			e[j].Beta = gds.Deltas[j]
+			e = append(e, zkp.Ciphertext{Alpha: gds.Gammas[j], Beta: gds.Deltas[j]})
 		}
 
 		pi := zkp.MakeRandPerm(int(zkp.K_Mill))
@@ -606,31 +605,30 @@ func (s *state) millionaire_MixOutput1() {
 
 		c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z := zkp.VerifiableSecretShuffle(e, E, *zkp.Y_Mill, *zkp.G, *zkp.P, *zkp.Q, pi, R)
 		err := zkp.CheckVerifiableSecretShuffle(e, E, *zkp.P, *zkp.Q, *zkp.G, *zkp.Y_Mill, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
-		
+
 		if err != nil {
 			log.Printf("YAY VERIFIABLY SHUFFLED")
 		} else {
-			log.Printf("YAY DIDN'T VERIFIABLY SHUFFLED")
+			log.Printf("YAY DIDN'T VERIFIABLY SHUFFLE")
 		}
 	}
 
 	// var proof pb.VerifiableShuffle
 	// proof.
-	
+	//
 	// for _, t := range ts {
-	// 	proof.Ts = append(proof.Ts, t.Bytes())
+	//   proof.Ts = append(proof.Ts, t.Bytes())
 	// }
-
+	//
 	// // log.Println("Beginning random exponentiation6")
 	// proof.R = r.Bytes()
 	// proofs = append(proofs, &proof)
-
 
 }
 
 func (s *state) millionaire_MixOutput2() {
 	// if *id == 1 {
-	
+
 	// }
 }
 

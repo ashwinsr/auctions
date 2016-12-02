@@ -77,7 +77,7 @@ message VerifiableShuffle {
   repeated bytes c = 1;
   bytes cd = 2;
   bytes cD = 3;
-  bytes ER = 4;
+  bytes eR = 4;
   repeated bytes f = 5;
   bytes fd = 6;
   bytes yd = 7;
