@@ -1,22 +1,10 @@
-package millionaire
+package main
 
 import (
 	"github.com/ashwinsr/auctions/zkp"
 	"log"
 	"math/big"
 )
-
-type PhiStruct struct {
-	Phis []big.Int
-}
-
-type GammaDeltaStruct struct {
-	Gammas, Deltas []big.Int
-}
-
-type AlphaBetaStruct struct {
-	alphas, betas []big.Int
-}
 
 // Computes PI_{d=j+1}^{k} (a1_d/a2_d)^2^d-2
 // where a1 and a2 are either both alpha arrays

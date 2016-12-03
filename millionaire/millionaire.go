@@ -1,27 +1,31 @@
-package millionaire
+package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"math/big"
-	"net"
-	"os"
-	"time"
 
-	"google.golang.org/grpc"
-
+	"github.com/ashwinsr/auctions/lib"
 	"github.com/ashwinsr/auctions/pb"
 	"github.com/ashwinsr/auctions/zkp"
 	"github.com/golang/protobuf/proto"
-	google_protobuf "github.com/golang/protobuf/ptypes/empty"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc/credentials"
 
 	// "net/http"
 	_ "net/http/pprof"
 )
+
+type PhiStruct struct {
+	Phis []big.Int
+}
+
+type GammaDeltaStruct struct {
+	Gammas, Deltas []big.Int
+}
+
+type AlphaBetaStruct struct {
+	alphas, betas []big.Int
+}
 
 // keeps state
 type state struct {
@@ -34,14 +38,30 @@ type state struct {
 	// TODO millionaire specific
 	myAlphasBetas                 *AlphaBetaStruct
 	theirAlphasBetas              *AlphaBetaStruct
-	myGammasDeltas                *millionaire.GammaDeltaStruct
-	theirGammasDeltas             *millionaire.GammaDeltaStruct
-	myExponentiatedGammasDeltas   *millionaire.GammaDeltaStruct
-	theirExponentiatedGammasDelta *millionaire.GammaDeltaStruct
-	phisBeforeExponentiation      *millionaire.PhiStruct
-	myPhis                        *millionaire.PhiStruct
-	theirPhis                     *millionaire.PhiStruct
+	myGammasDeltas                *GammaDeltaStruct
+	theirGammasDeltas             *GammaDeltaStruct
+	myExponentiatedGammasDeltas   *GammaDeltaStruct
+	theirExponentiatedGammasDelta *GammaDeltaStruct
+	phisBeforeExponentiation      *PhiStruct
+	myPhis                        *PhiStruct
+	theirPhis                     *PhiStruct
 }
+
+func getState(state_ interface{}) (s *state) {
+	s, ok := state_.(*state)
+	if !ok {
+		log.Fatalf("Failed to typecast state.\n")
+	}
+
+	return
+}
+
+var (
+	id = flag.Int("id", -1, "ID")
+
+	// TODO millionaire specific
+	bid = flag.Uint("bid", 0, "Amount of money")
+)
 
 // ROUND 1 FUNCTIONS
 
@@ -54,7 +74,7 @@ type state struct {
  * 5. Receives n public keys from keyChan, puts them in state.keys
  * 6. Calculates the final public key, and stores into state.
  */
-func computeRound1(state interface{}) interface{} {
+func computeRound1(state interface{}) proto.Message {
 	s := getState(state)
 
 	// Generate private key
@@ -67,15 +87,13 @@ func computeRound1(state interface{}) interface{} {
 	// Create proto structure of zkp
 	zkpPrivKey := &pb.DiscreteLogKnowledge{T: t.Bytes(), R: r.Bytes()}
 
-	key := pb.Key{
-		key:   s.myPublicKey,
-		proof: zkpPrivKey,
+	return &pb.Key{
+		Key:   s.myPublicKey.Bytes(),
+		Proof: zkpPrivKey,
 	}
-
-	return key
 }
 
-func checkRound1(result *pb.OuterStruct) (err error) {
+func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
 	var key pb.Key
 
 	var k, t, r big.Int
@@ -104,12 +122,15 @@ func receiveRound1(state interface{}, results []*pb.OuterStruct) {
 	s.keys = append(s.keys, s.myPublicKey)
 
 	for i := 0; i < len(results); i++ {
-		err = proto.Unmarshal(results[i].GetData(), &key)
+		if i == *id {
+			continue
+		}
+		err := proto.Unmarshal(results[i].GetData(), &key)
 		if err != nil {
 			log.Fatalf("Failed to unmarshal pb.Key.\n")
 		}
 		var k big.Int
-		k.SetBytes(key.key)
+		k.SetBytes(key.Key)
 		s.keys = append(s.keys, k)
 	}
 
@@ -126,7 +147,7 @@ func receiveRound1(state interface{}, results []*pb.OuterStruct) {
 
 // ROUND 2 FUNCTIONS
 
-func computeRound2(state interface{}) interface{} {
+func computeRound2(state interface{}) proto.Message {
 	s := getState(state)
 
 	var alphas, betas [][]byte
@@ -139,7 +160,7 @@ func computeRound2(state interface{}) interface{} {
 		var alphaJ, betaJ, rJ big.Int
 		rJ.Rand(zkp.RandGen, zkp.Q)
 
-		log.Printf("r_%v,%v = %v\n", *id, j, rJ.String())
+		// log.Printf("r_%v,%v = %v\n", *id, j, rJ.String())
 
 		// get the j-th bit of bid
 		Bij := (((*bid) >> j) & 1)
@@ -180,16 +201,17 @@ func computeRound2(state interface{}) interface{} {
 				R_2: r_2.Bytes(),
 			})
 		}
+	}
 
-		return &pb.AlphaBeta{
-			Alphas: alphas,
-			Betas:  betas,
-			Proofs: proofs,
-		}
+	return &pb.AlphaBeta{
+		Alphas: alphas,
+		Betas:  betas,
+		Proofs: proofs,
 	}
 }
 
-func checkRound2(result *pb.OuterStruct) (err error) {
+func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
+	s := getState(state)
 	var in pb.AlphaBeta
 
 	err = proto.Unmarshal(result.GetData(), &in)
@@ -230,25 +252,27 @@ func receiveRound2(state interface{}, results []*pb.OuterStruct) {
 	s.theirAlphasBetas = &AlphaBetaStruct{}
 
 	// Wait for alphas and betas of other client
-	for i := 0; i < len(clients); i++ {
-		err = proto.Unmarshal(results[i].GetData(), &alphabeta)
+	for i := 0; i < len(results); i++ {
+		if i == *id {
+			continue
+		}
+		err := proto.Unmarshal(results[i].GetData(), &alphabeta)
 		if err != nil {
 			log.Fatalf("Failed to unmarshal pb.AlphaBeta.\n")
 		}
-		r := results[i]
 		for j := 0; j < len(alphabeta.GetAlphas()); j++ {
-			s.theirAlphasBetas.alphas = append(s.theirAlphasBetas.alphas, *new(big.Int).SetBytes(alphaBeta.GetAlphas()[j]))
-			s.theirAlphasBetas.betas = append(s.theirAlphasBetas.betas, *new(big.Int).SetBytes(alphaBeta.GetBetas()[j]))
+			s.theirAlphasBetas.alphas = append(s.theirAlphasBetas.alphas, *new(big.Int).SetBytes(alphabeta.GetAlphas()[j]))
+			s.theirAlphasBetas.betas = append(s.theirAlphasBetas.betas, *new(big.Int).SetBytes(alphabeta.GetBetas()[j]))
 		}
 	}
 }
 
 // ROUND 3 FUNCTIONS
 
-func computeRound3(state interface{}) interface{} {
+func computeRound3(state interface{}) proto.Message {
 	s := getState(state)
 
-	var gds *millionaire.GammaDeltaStruct
+	var gds *GammaDeltaStruct
 	if *id == 0 {
 		gds = MillionaireCalculateGammaDelta(s.myAlphasBetas.alphas, s.theirAlphasBetas.alphas,
 			s.myAlphasBetas.betas, s.theirAlphasBetas.betas, *zkp.Y_Mill, *zkp.P)
@@ -265,7 +289,7 @@ func computeRound3(state interface{}) interface{} {
 	return nil
 }
 
-func checkRound3(result *pb.OuterStruct) (err error) {
+func checkRound3(state interface{}, result *pb.OuterStruct) (err error) {
 	return nil
 }
 
@@ -275,21 +299,21 @@ func receiveRound3(state interface{}, results []*pb.OuterStruct) {
 
 // ROUND 4 FUNCTIONS
 
-func computeRound4(state interface{}) interface{} {
+func computeRound4(state interface{}) proto.Message {
 	return nil
 }
 
-func checkRound5(result *pb.OuterStruct) (err error) {
+func checkRound4(state interface{}, result *pb.OuterStruct) (err error) {
 	return nil
 }
 
-func receiveRound5(state interface{}, results []*pb.OuterStruct) {
+func receiveRound4(state interface{}, results []*pb.OuterStruct) {
 	return
 }
 
 // ROUND 5 FUNCTIONS
 
-func computeRound5(state interface{}) interface{} {
+func computeRound5(state interface{}) proto.Message {
 	s := getState(state)
 	var proofs []*pb.DiscreteLogEquality
 
@@ -369,7 +393,7 @@ func computeRound5(state interface{}) interface{} {
 	}
 }
 
-func checkRound5(result *pb.OuterStruct) (err error) {
+func checkRound5(state interface{}, result *pb.OuterStruct) (err error) {
 	var in pb.RandomizedOutput
 
 	err = proto.Unmarshal(result.GetData(), &in)
@@ -403,6 +427,8 @@ func checkRound5(result *pb.OuterStruct) (err error) {
 			log.Fatalf("Received incorrect zero-knowledge proof for exponentiated gammas/deltas")
 		}
 	}
+
+	return
 }
 
 func receiveRound5(state interface{}, results []*pb.OuterStruct) {
@@ -412,22 +438,24 @@ func receiveRound5(state interface{}, results []*pb.OuterStruct) {
 	s.theirExponentiatedGammasDelta = &GammaDeltaStruct{}
 
 	// Wait for alphas and betas of other client
-	for i := 0; i < len(clients); i++ {
-		err = proto.Unmarshal(results[i].GetData(), &randomizedoutput)
+	for i := 0; i < len(results); i++ {
+		if i == *id {
+			continue
+		}
+		err := proto.Unmarshal(results[i].GetData(), &randomizedoutput)
 		if err != nil {
 			log.Fatalf("Failed to unmarshal pb.RandomizedOutput.\n")
 		}
-		r := results[i]
-		for j := 0; j < len(alphabeta.GetGammas()); j++ {
-			s.theirExponentiatedGammasDelta.gammas = append(s.theirExponentiatedGammasDelta.gammas, *new(big.Int).SetBytes(randomizedoutput.GetGammas()[j]))
-			s.theirExponentiatedGammasDelta.deltas = append(s.theirExponentiatedGammasDelta.deltas, *new(big.Int).SetBytes(randomizedoutput.GetDeltas()[j]))
+		for j := 0; j < len(randomizedoutput.GetGammas()); j++ {
+			s.theirExponentiatedGammasDelta.Gammas = append(s.theirExponentiatedGammasDelta.Gammas, *new(big.Int).SetBytes(randomizedoutput.GetGammas()[j]))
+			s.theirExponentiatedGammasDelta.Deltas = append(s.theirExponentiatedGammasDelta.Deltas, *new(big.Int).SetBytes(randomizedoutput.GetDeltas()[j]))
 		}
 	}
 }
 
 // ROUND 6 FUNCTIONS
 
-func computeRound6(state interface{}) interface{} {
+func computeRound6(state interface{}) proto.Message {
 	s := getState(state)
 	// log.Println("Beginning decryption")
 
@@ -483,7 +511,7 @@ func computeRound6(state interface{}) interface{} {
 	}
 }
 
-func checkRound6(result *pb.OuterStruct) (err error) {
+func checkRound6(state interface{}, result *pb.OuterStruct) (err error) {
 	var in pb.DecryptionInfo
 
 	err = proto.Unmarshal(result.GetData(), &in)
@@ -519,6 +547,8 @@ func checkRound6(result *pb.OuterStruct) (err error) {
 			log.Fatalf("Received incorrect zero-knowledge proof for phis")
 		}
 	}
+
+	return
 }
 
 func receiveRound6(state interface{}, results []*pb.OuterStruct) {
@@ -532,4 +562,35 @@ func receiveRound6(state interface{}, results []*pb.OuterStruct) {
 		}
 	}
 	log.Fatalf("ID 1 is the winner\n")
+}
+
+func main() {
+	flag.Parse()
+
+	myState := &state{}
+	lib.Init(*id)
+
+	hosts := lib.GetHosts()
+	myAddr := hosts[*id]
+
+	fmt.Println(myAddr)
+
+	go lib.RunServer(myAddr)
+
+	lib.InitClients(hosts, myAddr)
+
+	rounds := []lib.Round{
+		{computeRound1, checkRound1, receiveRound1},
+		{computeRound2, checkRound2, receiveRound2},
+		{computeRound3, checkRound3, receiveRound3},
+		{computeRound4, checkRound4, receiveRound4},
+		{computeRound5, checkRound5, receiveRound5},
+		{computeRound6, checkRound6, receiveRound6},
+	}
+
+	lib.Register(rounds, myState)
+
+	// TODO do this better
+	for {
+	}
 }
