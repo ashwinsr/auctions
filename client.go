@@ -15,6 +15,7 @@ import (
 	"github.com/ashwinsr/auctions/millionaire"
 	"github.com/ashwinsr/auctions/pb"
 	"github.com/ashwinsr/auctions/zkp"
+	"github.com/golang/protobuf/proto"
 	google_protobuf "github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/credentials"
@@ -83,6 +84,7 @@ var (
 )
 
 // TODO millionaire specific
+// TODO delete
 type AlphaBetaStruct struct {
 	alphas, betas []big.Int
 }
@@ -109,6 +111,7 @@ func (s *server) Publish(ctx context.Context, in *pb.OuterStruct) (*google_proto
 	return &google_protobuf.Empty{}, nil
 }
 
+// TODO delete all these gRPC functions
 func (s *server) MillionaireGammaDelta1(ctx context.Context, in *pb.MixedOutput) (*google_protobuf.Empty, error) {
 	return &google_protobuf.Empty{}, nil
 }
@@ -341,6 +344,7 @@ func main() {
 	}
 }
 
+// TODO use as part of library code
 func (s *state) publishAll(result *pb.Result) {
 	// Signal to all receivers that we can receive now
 	for i := 0; i < len(clients); i++ {
@@ -361,6 +365,7 @@ func (s *state) publishAll(result *pb.Result) {
 	}
 }
 
+// TODO use inside of gRPC publish call
 func (s *state) checkAll(check CheckFn) {
 	for i := 0; i < len(clients); i++ {
 		result := <-receivedChan
@@ -508,7 +513,7 @@ func (s *state) checkRound4(result *pb.OuterStruct) (err error) {
 	}
 }
 
-func receiveRound1(state interface{}, result []*pb.OuterStruct) {
+func receiveRound1(state interface{}, results []*pb.OuterStruct) {
 	var s *state
 	s, err := state.(state)
 	if err != nil {
@@ -519,8 +524,8 @@ func receiveRound1(state interface{}, result []*pb.OuterStruct) {
 
 	s.keys = append(s.keys, s.myPublicKey)
 
-	for i := 0; i < len(result); i++ {
-		err = proto.Unmarshal(result.GetData(), &key)
+	for i := 0; i < len(results); i++ {
+		err = proto.Unmarshal(results[i].GetData(), &key)
 		if err != nil {
 			log.Fatalf("Failed to unmarshal pb.Key.\n")
 		}
@@ -540,6 +545,31 @@ func receiveRound1(state interface{}, result []*pb.OuterStruct) {
 	log.Printf("Calculated public key: %v\n", s.publicKey.String())
 }
 
+func receiveRound2(state interface{}, results []*pb.OuterStruct) {
+	var s *state
+	s, err := state.(state)
+	if err != nil {
+		log.Fatalf("Failed to typecast state.\n")
+	}
+
+	var alphabeta pb.AlphaBeta
+	s.theirAlphasBetas = &AlphaBetaStruct{}
+
+	// Wait for alphas and betas of other client
+	for i := 0; i < len(clients); i++ {
+		err = proto.Unmarshal(results[i].GetData(), &alphabeta)
+		if err != nil {
+			log.Fatalf("Failed to unmarshal pb.AlphaBeta.\n")
+		}
+		r := results[i]
+		for j := 0; j < len(alphabeta.GetAlphas()); j++ {
+			s.theirAlphasBetas.alphas = append(s.theirAlphasBetas.alphas, *new(big.Int).SetBytes(alphaBeta.GetAlphas()[j]))
+			s.theirAlphasBetas.betas = append(s.theirAlphasBetas.betas, *new(big.Int).SetBytes(alphaBeta.GetBetas()[j]))
+		}
+	}
+}
+
+// TODO delete comment
 /*
  * 1. Generates a private/public key pair
  * 2. Generates zero-knowledge-proof of private key
