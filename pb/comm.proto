@@ -23,12 +23,6 @@ message OuterStruct {
   bytes data = 3;
 }
 
-message Result {
-  int32 round = 1;
-  Key Key = 2;
-  AlphaBeta AlphaBeta = 3;
-}
-
 // The request message containing the user's name.
 message Key {
   bytes key = 1;

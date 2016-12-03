@@ -378,8 +378,9 @@ func (s *state) checkAll(check CheckFn) {
 	}
 }
 
-type CheckFn func(*pb.Result) error
+type CheckFn func(*pb.OuterStruct) error
 type ReceiveFn func(state interface{}, result []*pb.OuterStruct)
+type ComputeFn func(state interface{}) interface{}
 
 func (s *state) checkRound1(result *pb.OuterStruct) (err error) {
 	var key pb.Key
@@ -396,7 +397,6 @@ func (s *state) checkRound1(result *pb.OuterStruct) (err error) {
 	r.SetBytes(key.GetProof().GetR())
 
 	err = zkp.CheckDiscreteLogKnowledgeProof(*zkp.G, k, t, r, *zkp.P, *zkp.Q)
-
 	if err != nil {
 		log.Fatalf("Received incorrect zero-knowledge proof. Key=%v, t=%v, r=%v", k, t, r)
 	}
@@ -513,13 +513,15 @@ func (s *state) checkRound4(result *pb.OuterStruct) (err error) {
 	}
 }
 
-func receiveRound1(state interface{}, results []*pb.OuterStruct) {
-	var s *state
+func getState(state interface{}) (s *state) {
 	s, err := state.(state)
 	if err != nil {
 		log.Fatalf("Failed to typecast state.\n")
 	}
+}
 
+func receiveRound1(state interface{}, results []*pb.OuterStruct) {
+	s := getState(state)
 	var key pb.Key
 
 	s.keys = append(s.keys, s.myPublicKey)
@@ -546,12 +548,7 @@ func receiveRound1(state interface{}, results []*pb.OuterStruct) {
 }
 
 func receiveRound2(state interface{}, results []*pb.OuterStruct) {
-	var s *state
-	s, err := state.(state)
-	if err != nil {
-		log.Fatalf("Failed to typecast state.\n")
-	}
-
+	s := getState(state)
 	var alphabeta pb.AlphaBeta
 	s.theirAlphasBetas = &AlphaBetaStruct{}
 
@@ -569,6 +566,15 @@ func receiveRound2(state interface{}, results []*pb.OuterStruct) {
 	}
 }
 
+func receiveRound3(state interface{}, results []*pb.OuterStruct) {
+	s := getState(state)
+  
+}
+
+func marshalData(result []*pb.OuterStruct) []bytes {
+  
+}
+
 // TODO delete comment
 /*
  * 1. Generates a private/public key pair
@@ -578,7 +584,9 @@ func receiveRound2(state interface{}, results []*pb.OuterStruct) {
  * 5. Receives n public keys from keyChan, puts them in state.keys
  * 6. Calculates the final public key, and stores into state.
  */
-func (s *state) round1() {
+func computeRound1(state interface{}) interface{} {
+  s := getState(state)
+
 	// Generate private key
 	s.myPrivateKey.Rand(zkp.RandGen, zkp.Q)
 	// Calculate public key
@@ -589,39 +597,15 @@ func (s *state) round1() {
 	// Create proto structure of zkp
 	zkpPrivKey := &pb.DiscreteLogKnowledge{T: t.Bytes(), R: r.Bytes()}
 
-	result := pb.Result{
-		Round: 1,
-		Key: &pb.Key{
-			Key:   s.myPublicKey.Bytes(),
-			Proof: zkpPrivKey,
-		},
+	key := pb.Key{
+    key: s.myPublicKey,
+    proof: zkpPrivKey,
 	}
-
-	s.publishAll(&result)
-	s.checkAll(s.checkRound1)
-
-	s.keys = append(s.keys, s.myPublicKey)
-
-	// Wait for public keys of all other clients
-	for i := 0; i < len(clients); i++ {
-		r := <-checkedChan
-		var k big.Int
-		k.SetBytes(r.Key.Key)
-		s.keys = append(s.keys, k)
-	}
-
-	// Calculating final public key
-	// TODO SHOULD THIS BE MOD P? Probably doesn't matter, but just for computational practicality
-	s.publicKey.Set(zkp.One)
-	for _, key := range s.keys {
-		s.publicKey.Mul(&s.publicKey, &key)
-	}
-	s.publicKey.Mod(&s.publicKey, zkp.P)
-
-	log.Printf("Calculated public key: %v\n", s.publicKey.String())
+  
+  return key
 }
 
-func (s *state) round2() {
+func computeRound2(state interface{}) {
 	// Publish alphas and betas to all of the clients
 
 	var alphas, betas [][]byte
@@ -659,11 +643,7 @@ func (s *state) round2() {
 		betasInts = append(betasInts, betaJ)
 
 		var m big.Int
-		if Bij == 1 {
-			m.Set(zkp.Y_Mill)
-		} else {
-			m.Set(zkp.One)
-		}
+		if Bij == 1 { 
 		a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 :=
 			zkp.EncryptedValueIsOneOfTwo(m, s.publicKey, rJ, *zkp.G,
 				*zkp.Y_Mill, *zkp.P, *zkp.Q)
