@@ -98,7 +98,7 @@ var (
 // server is used to implement pb.ZKPAuctionServer
 type server struct{}
 
-func (s *server) Publish(ctx context.Context, in *pb.Result) (*google_protobuf.Empty, error) {
+func (s *server) Publish(ctx context.Context, in *pb.OuterStruct) (*google_protobuf.Empty, error) {
 	go func() {
 		// Wait until we are ready
 		<-isReady
@@ -374,31 +374,42 @@ func (s *state) checkAll(check CheckFn) {
 }
 
 type CheckFn func(*pb.Result) error
+type ReceiveFn func(state interface{}, result []*pb.OuterStruct)
 
-func (s *state) checkRound1(result *pb.Result) (err error) {
-	var key, t, r big.Int
+func (s *state) checkRound1(result *pb.OuterStruct) (err error) {
+	var key pb.Key
 
-	key.SetBytes(result.Key.Key) // TODO this how you access Key? Or GetKey()
-	t.SetBytes(result.Key.GetProof().T)
-	r.SetBytes(result.Key.GetProof().R)
+	var k, t, r big.Int
 
-	err = zkp.CheckDiscreteLogKnowledgeProof(*zkp.G, key, t, r, *zkp.P, *zkp.Q)
+	err = proto.Unmarshal(result.GetData(), &key)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal pb.Key.\n")
+	}
+
+	k.SetBytes(key.GetKey())
+	t.SetBytes(key.GetProof().GetT())
+	r.SetBytes(key.GetProof().GetR())
+
+	err = zkp.CheckDiscreteLogKnowledgeProof(*zkp.G, k, t, r, *zkp.P, *zkp.Q)
 
 	if err != nil {
-		log.Fatalf("Received incorrect zero-knowledge proof. Key=%v, t=%v, r=%v", key, t, r)
+		log.Fatalf("Received incorrect zero-knowledge proof. Key=%v, t=%v, r=%v", k, t, r)
 	}
 
 	return
 }
 
-func (s *state) checkRound2(result *pb.Result) (err error) {
-	in := result.AlphaBeta
+func (s *state) checkRound2(result *pb.OuterStruct) (err error) {
+	var in pb.AlphaBeta
+
+	err = proto.Unmarshal(result.GetData(), &in)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal pb.AlphaBeta.\n")
+	}
 
 	if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != zkp.K_Mill {
 		log.Fatalf("Incorrect number of shit")
 	}
-
-	var abs AlphaBetaStruct
 
 	for i := 0; i < len(in.Alphas); i++ {
 		var alpha, beta, a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 big.Int
@@ -418,14 +429,115 @@ func (s *state) checkRound2(result *pb.Result) (err error) {
 			*zkp.G, s.publicKey, *zkp.Y_Mill); err != nil {
 			log.Fatalf("Received incorrect zero-knowledge proof for alpha/beta")
 		}
-
-		// TODO change to pass protobuf structs
-		abs.alphas = append(abs.alphas, alpha)
-		abs.betas = append(abs.betas, beta)
-		log.Printf("ABS: %v %v\n", abs.alphas, abs.betas)
 	}
 
 	return
+}
+
+func (s *state) checkRound3(result *pb.OuterStruct) (err error) {
+	var in pb.RandomizedOutput
+
+	err = proto.Unmarshal(result.GetData(), &in)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal pb.RandomizedOutput.\n")
+	}
+
+	if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != zkp.K_Mill {
+		log.Fatalf("Incorrect number of shit4")
+	}
+
+	for j := 0; j < len(in.Gammas); j++ {
+		var gamma, delta big.Int
+		gamma.SetBytes(in.Gammas[j])
+		delta.SetBytes(in.Deltas[j])
+
+		var bases, results, ts []big.Int
+		results = append(results, gamma)
+		results = append(results, delta)
+
+		// set proof values
+		var r big.Int
+		r.SetBytes(in.Proofs[j].R)
+		for _, t := range in.Proofs[j].Ts {
+			var t_temp big.Int
+			t_temp.SetBytes(t)
+			ts = append(ts, t_temp)
+		}
+
+		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+			log.Fatalf("Received incorrect zero-knowledge proof for exponentiated gammas/deltas")
+		}
+	}
+}
+
+func (s *state) checkRound4(result *pb.OuterStruct) (err error) {
+	var in pb.DecryptionInfo
+
+	err = proto.Unmarshal(result.GetData(), &in)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal pb.DecryptionInfo.\n")
+	}
+
+	if len(in.Phis) != len(in.Proofs) || uint(len(in.Proofs)) != zkp.K_Mill {
+		log.Printf("len of phis=%v, len of proofs=%v, k=%v\n", len(in.Phis), uint(len(in.Proofs)), zkp.K_Mill)
+		log.Fatalf("Incorrect number of shit5")
+	}
+
+	for j := 0; j < len(in.Phis); j++ {
+		var phi big.Int
+		phi.SetBytes(in.Phis[j])
+
+		var bases, results, ts []big.Int
+		// proof equality of logarithms of the received phi and their public key
+		bases = append(bases, *zkp.G)
+		results = append(results, phi)
+
+		// set proof values
+		var r big.Int
+		r.SetBytes(in.Proofs[j].R)
+		for _, t := range in.Proofs[j].Ts {
+			var t_temp big.Int
+			t_temp.SetBytes(t)
+			ts = append(ts, t_temp)
+		}
+
+		// log.Printf("Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
+		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+			log.Fatalf("Received incorrect zero-knowledge proof for phis")
+		}
+	}
+}
+
+func receiveRound1(state interface{}, result []*pb.OuterStruct) {
+	var s *state
+	s, err := state.(state)
+	if err != nil {
+		log.Fatalf("Failed to typecast state.\n")
+	}
+
+	var key pb.Key
+
+	s.keys = append(s.keys, s.myPublicKey)
+
+	for i := 0; i < len(result); i++ {
+		err = proto.Unmarshal(result.GetData(), &key)
+		if err != nil {
+			log.Fatalf("Failed to unmarshal pb.Key.\n")
+		}
+		var k big.Int
+		k.SetBytes(key.key)
+		s.keys = append(s.keys, k)
+	}
+
+	// Calculating final public key
+	// TODO SHOULD THIS BE MOD P? Probably doesn't matter, but just for computational practicality
+	s.publicKey.Set(zkp.One)
+	for _, key := range s.keys {
+		s.publicKey.Mul(&s.publicKey, &key)
+		s.publicKey.Mod(&s.publicKey, zkp.P)
+	}
+
+	log.Printf("Calculated public key: %v\n", s.publicKey.String())
 }
 
 /*
