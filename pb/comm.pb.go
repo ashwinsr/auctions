@@ -10,7 +10,6 @@ It is generated from these files:
 
 It has these top-level messages:
 	OuterStruct
-	Result
 	Key
 	AlphaBeta
 	MixedOutput
@@ -76,38 +75,6 @@ func (m *OuterStruct) GetData() []byte {
 	return nil
 }
 
-type Result struct {
-	Round     int32      `protobuf:"varint,1,opt,name=round" json:"round,omitempty"`
-	Key       *Key       `protobuf:"bytes,2,opt,name=Key" json:"Key,omitempty"`
-	AlphaBeta *AlphaBeta `protobuf:"bytes,3,opt,name=AlphaBeta" json:"AlphaBeta,omitempty"`
-}
-
-func (m *Result) Reset()                    { *m = Result{} }
-func (m *Result) String() string            { return proto.CompactTextString(m) }
-func (*Result) ProtoMessage()               {}
-func (*Result) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
-
-func (m *Result) GetRound() int32 {
-	if m != nil {
-		return m.Round
-	}
-	return 0
-}
-
-func (m *Result) GetKey() *Key {
-	if m != nil {
-		return m.Key
-	}
-	return nil
-}
-
-func (m *Result) GetAlphaBeta() *AlphaBeta {
-	if m != nil {
-		return m.AlphaBeta
-	}
-	return nil
-}
-
 // The request message containing the user's name.
 type Key struct {
 	Key []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
@@ -118,7 +85,7 @@ type Key struct {
 func (m *Key) Reset()                    { *m = Key{} }
 func (m *Key) String() string            { return proto.CompactTextString(m) }
 func (*Key) ProtoMessage()               {}
-func (*Key) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+func (*Key) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
 func (m *Key) GetKey() []byte {
 	if m != nil {
@@ -144,7 +111,7 @@ type AlphaBeta struct {
 func (m *AlphaBeta) Reset()                    { *m = AlphaBeta{} }
 func (m *AlphaBeta) String() string            { return proto.CompactTextString(m) }
 func (*AlphaBeta) ProtoMessage()               {}
-func (*AlphaBeta) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
+func (*AlphaBeta) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
 func (m *AlphaBeta) GetAlphas() [][]byte {
 	if m != nil {
@@ -177,7 +144,7 @@ type MixedOutput struct {
 func (m *MixedOutput) Reset()                    { *m = MixedOutput{} }
 func (m *MixedOutput) String() string            { return proto.CompactTextString(m) }
 func (*MixedOutput) ProtoMessage()               {}
-func (*MixedOutput) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+func (*MixedOutput) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
 
 func (m *MixedOutput) GetGammas() [][]byte {
 	if m != nil {
@@ -210,7 +177,7 @@ type RandomizedOutput struct {
 func (m *RandomizedOutput) Reset()                    { *m = RandomizedOutput{} }
 func (m *RandomizedOutput) String() string            { return proto.CompactTextString(m) }
 func (*RandomizedOutput) ProtoMessage()               {}
-func (*RandomizedOutput) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
+func (*RandomizedOutput) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
 func (m *RandomizedOutput) GetGammas() [][]byte {
 	if m != nil {
@@ -242,7 +209,7 @@ type DecryptionInfo struct {
 func (m *DecryptionInfo) Reset()                    { *m = DecryptionInfo{} }
 func (m *DecryptionInfo) String() string            { return proto.CompactTextString(m) }
 func (*DecryptionInfo) ProtoMessage()               {}
-func (*DecryptionInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
+func (*DecryptionInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
 
 func (m *DecryptionInfo) GetPhis() [][]byte {
 	if m != nil {
@@ -266,7 +233,7 @@ type DiscreteLogKnowledge struct {
 func (m *DiscreteLogKnowledge) Reset()                    { *m = DiscreteLogKnowledge{} }
 func (m *DiscreteLogKnowledge) String() string            { return proto.CompactTextString(m) }
 func (*DiscreteLogKnowledge) ProtoMessage()               {}
-func (*DiscreteLogKnowledge) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
+func (*DiscreteLogKnowledge) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
 func (m *DiscreteLogKnowledge) GetT() []byte {
 	if m != nil {
@@ -296,7 +263,7 @@ type EqualsOneOfTwo struct {
 func (m *EqualsOneOfTwo) Reset()                    { *m = EqualsOneOfTwo{} }
 func (m *EqualsOneOfTwo) String() string            { return proto.CompactTextString(m) }
 func (*EqualsOneOfTwo) ProtoMessage()               {}
-func (*EqualsOneOfTwo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
+func (*EqualsOneOfTwo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
 func (m *EqualsOneOfTwo) GetA_1() []byte {
 	if m != nil {
@@ -360,7 +327,7 @@ type VerifiableShuffle struct {
 func (m *VerifiableShuffle) Reset()                    { *m = VerifiableShuffle{} }
 func (m *VerifiableShuffle) String() string            { return proto.CompactTextString(m) }
 func (*VerifiableShuffle) ProtoMessage()               {}
-func (*VerifiableShuffle) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
+func (*VerifiableShuffle) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
 
 type DiscreteLogEquality struct {
 	Ts [][]byte `protobuf:"bytes,1,rep,name=ts,proto3" json:"ts,omitempty"`
@@ -370,7 +337,7 @@ type DiscreteLogEquality struct {
 func (m *DiscreteLogEquality) Reset()                    { *m = DiscreteLogEquality{} }
 func (m *DiscreteLogEquality) String() string            { return proto.CompactTextString(m) }
 func (*DiscreteLogEquality) ProtoMessage()               {}
-func (*DiscreteLogEquality) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
+func (*DiscreteLogEquality) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
 
 func (m *DiscreteLogEquality) GetTs() [][]byte {
 	if m != nil {
@@ -388,7 +355,6 @@ func (m *DiscreteLogEquality) GetR() []byte {
 
 func init() {
 	proto.RegisterType((*OuterStruct)(nil), "pb.OuterStruct")
-	proto.RegisterType((*Result)(nil), "pb.Result")
 	proto.RegisterType((*Key)(nil), "pb.Key")
 	proto.RegisterType((*AlphaBeta)(nil), "pb.AlphaBeta")
 	proto.RegisterType((*MixedOutput)(nil), "pb.MixedOutput")
@@ -406,18 +372,12 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// const _ = grpc.SupportPackageIsVersion4
+// const _ = grpc.SupportPackageIsVersion3
 
 // Client API for ZKPAuction service
 
 type ZKPAuctionClient interface {
-	Publish(ctx context.Context, in *Result, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
-	// TODO millionaire specific
-	MillionaireAlphaBeta(ctx context.Context, in *AlphaBeta, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
-	MillionaireGammaDelta1(ctx context.Context, in *MixedOutput, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
-	MillionaireGammaDelta2(ctx context.Context, in *MixedOutput, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
-	MillionaireRandomizeOutput(ctx context.Context, in *RandomizedOutput, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
-	MillionaireDecryptionInfo(ctx context.Context, in *DecryptionInfo, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
+	Publish(ctx context.Context, in *OuterStruct, opts ...grpc.CallOption) (*google_protobuf.Empty, error)
 }
 
 type zKPAuctionClient struct {
@@ -428,54 +388,9 @@ func NewZKPAuctionClient(cc *grpc.ClientConn) ZKPAuctionClient {
 	return &zKPAuctionClient{cc}
 }
 
-func (c *zKPAuctionClient) Publish(ctx context.Context, in *Result, opts ...grpc.CallOption) (*google_protobuf.Empty, error) {
+func (c *zKPAuctionClient) Publish(ctx context.Context, in *OuterStruct, opts ...grpc.CallOption) (*google_protobuf.Empty, error) {
 	out := new(google_protobuf.Empty)
 	err := grpc.Invoke(ctx, "/pb.ZKPAuction/Publish", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *zKPAuctionClient) MillionaireAlphaBeta(ctx context.Context, in *AlphaBeta, opts ...grpc.CallOption) (*google_protobuf.Empty, error) {
-	out := new(google_protobuf.Empty)
-	err := grpc.Invoke(ctx, "/pb.ZKPAuction/MillionaireAlphaBeta", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *zKPAuctionClient) MillionaireGammaDelta1(ctx context.Context, in *MixedOutput, opts ...grpc.CallOption) (*google_protobuf.Empty, error) {
-	out := new(google_protobuf.Empty)
-	err := grpc.Invoke(ctx, "/pb.ZKPAuction/MillionaireGammaDelta1", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *zKPAuctionClient) MillionaireGammaDelta2(ctx context.Context, in *MixedOutput, opts ...grpc.CallOption) (*google_protobuf.Empty, error) {
-	out := new(google_protobuf.Empty)
-	err := grpc.Invoke(ctx, "/pb.ZKPAuction/MillionaireGammaDelta2", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *zKPAuctionClient) MillionaireRandomizeOutput(ctx context.Context, in *RandomizedOutput, opts ...grpc.CallOption) (*google_protobuf.Empty, error) {
-	out := new(google_protobuf.Empty)
-	err := grpc.Invoke(ctx, "/pb.ZKPAuction/MillionaireRandomizeOutput", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *zKPAuctionClient) MillionaireDecryptionInfo(ctx context.Context, in *DecryptionInfo, opts ...grpc.CallOption) (*google_protobuf.Empty, error) {
-	out := new(google_protobuf.Empty)
-	err := grpc.Invoke(ctx, "/pb.ZKPAuction/MillionaireDecryptionInfo", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -485,13 +400,7 @@ func (c *zKPAuctionClient) MillionaireDecryptionInfo(ctx context.Context, in *De
 // Server API for ZKPAuction service
 
 type ZKPAuctionServer interface {
-	Publish(context.Context, *Result) (*google_protobuf.Empty, error)
-	// TODO millionaire specific
-	MillionaireAlphaBeta(context.Context, *AlphaBeta) (*google_protobuf.Empty, error)
-	MillionaireGammaDelta1(context.Context, *MixedOutput) (*google_protobuf.Empty, error)
-	MillionaireGammaDelta2(context.Context, *MixedOutput) (*google_protobuf.Empty, error)
-	MillionaireRandomizeOutput(context.Context, *RandomizedOutput) (*google_protobuf.Empty, error)
-	MillionaireDecryptionInfo(context.Context, *DecryptionInfo) (*google_protobuf.Empty, error)
+	Publish(context.Context, *OuterStruct) (*google_protobuf.Empty, error)
 }
 
 func RegisterZKPAuctionServer(s *grpc.Server, srv ZKPAuctionServer) {
@@ -499,7 +408,7 @@ func RegisterZKPAuctionServer(s *grpc.Server, srv ZKPAuctionServer) {
 }
 
 func _ZKPAuction_Publish_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Result)
+	in := new(OuterStruct)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -511,97 +420,7 @@ func _ZKPAuction_Publish_Handler(srv interface{}, ctx context.Context, dec func(
 		FullMethod: "/pb.ZKPAuction/Publish",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZKPAuctionServer).Publish(ctx, req.(*Result))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ZKPAuction_MillionaireAlphaBeta_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AlphaBeta)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ZKPAuctionServer).MillionaireAlphaBeta(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/pb.ZKPAuction/MillionaireAlphaBeta",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZKPAuctionServer).MillionaireAlphaBeta(ctx, req.(*AlphaBeta))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ZKPAuction_MillionaireGammaDelta1_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MixedOutput)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ZKPAuctionServer).MillionaireGammaDelta1(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/pb.ZKPAuction/MillionaireGammaDelta1",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZKPAuctionServer).MillionaireGammaDelta1(ctx, req.(*MixedOutput))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ZKPAuction_MillionaireGammaDelta2_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MixedOutput)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ZKPAuctionServer).MillionaireGammaDelta2(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/pb.ZKPAuction/MillionaireGammaDelta2",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZKPAuctionServer).MillionaireGammaDelta2(ctx, req.(*MixedOutput))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ZKPAuction_MillionaireRandomizeOutput_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RandomizedOutput)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ZKPAuctionServer).MillionaireRandomizeOutput(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/pb.ZKPAuction/MillionaireRandomizeOutput",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZKPAuctionServer).MillionaireRandomizeOutput(ctx, req.(*RandomizedOutput))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ZKPAuction_MillionaireDecryptionInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DecryptionInfo)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ZKPAuctionServer).MillionaireDecryptionInfo(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/pb.ZKPAuction/MillionaireDecryptionInfo",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZKPAuctionServer).MillionaireDecryptionInfo(ctx, req.(*DecryptionInfo))
+		return srv.(ZKPAuctionServer).Publish(ctx, req.(*OuterStruct))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -614,26 +433,6 @@ var _ZKPAuction_serviceDesc = grpc.ServiceDesc{
 			MethodName: "Publish",
 			Handler:    _ZKPAuction_Publish_Handler,
 		},
-		{
-			MethodName: "MillionaireAlphaBeta",
-			Handler:    _ZKPAuction_MillionaireAlphaBeta_Handler,
-		},
-		{
-			MethodName: "MillionaireGammaDelta1",
-			Handler:    _ZKPAuction_MillionaireGammaDelta1_Handler,
-		},
-		{
-			MethodName: "MillionaireGammaDelta2",
-			Handler:    _ZKPAuction_MillionaireGammaDelta2_Handler,
-		},
-		{
-			MethodName: "MillionaireRandomizeOutput",
-			Handler:    _ZKPAuction_MillionaireRandomizeOutput_Handler,
-		},
-		{
-			MethodName: "MillionaireDecryptionInfo",
-			Handler:    _ZKPAuction_MillionaireDecryptionInfo_Handler,
-		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "comm.proto",
@@ -642,44 +441,37 @@ var _ZKPAuction_serviceDesc = grpc.ServiceDesc{
 func init() { proto.RegisterFile("comm.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 624 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x9c, 0x94, 0x5f, 0x6f, 0xd3, 0x3c,
-	0x14, 0xc6, 0xdf, 0x26, 0x6b, 0xb7, 0xf7, 0x74, 0x8c, 0xe1, 0x95, 0xd1, 0x95, 0x1b, 0x94, 0x2b,
-	0x04, 0x52, 0xa6, 0x66, 0x1f, 0x00, 0x0d, 0x36, 0x4d, 0xd3, 0x36, 0x6d, 0xca, 0x18, 0x17, 0xdc,
-	0x20, 0xa7, 0x71, 0x5a, 0x83, 0x13, 0x07, 0xc7, 0xd1, 0x28, 0x9f, 0x84, 0x5b, 0xbe, 0x29, 0xfe,
-	0xd7, 0x36, 0x2d, 0x63, 0x82, 0xdd, 0xf9, 0x79, 0x7c, 0xf2, 0x3b, 0x39, 0xc7, 0xc7, 0x06, 0x18,
-	0xf1, 0x3c, 0x0f, 0x4b, 0xc1, 0x25, 0x47, 0x5e, 0x99, 0x0c, 0x9e, 0x8f, 0x39, 0x1f, 0x33, 0xb2,
-	0x6f, 0x9c, 0xa4, 0xce, 0xf6, 0x49, 0x5e, 0xca, 0xa9, 0x0d, 0x08, 0x6e, 0xa0, 0x7b, 0x59, 0x4b,
-	0x22, 0xae, 0xa5, 0xa8, 0x47, 0x12, 0x0d, 0x60, 0x63, 0xc4, 0x28, 0x29, 0x24, 0x4d, 0xfb, 0xad,
-	0x17, 0xad, 0x97, 0xed, 0x78, 0xae, 0xd1, 0x2e, 0x74, 0x2a, 0x49, 0x4a, 0xb5, 0xe3, 0x99, 0x1d,
-	0xa7, 0x10, 0x82, 0xb5, 0x14, 0x4b, 0xdc, 0xf7, 0x95, 0xbb, 0x19, 0x9b, 0x75, 0x90, 0x41, 0x27,
-	0x26, 0x55, 0xcd, 0x24, 0xea, 0x41, 0x5b, 0xf0, 0xba, 0x98, 0xe1, 0xac, 0x40, 0x7b, 0xe0, 0x9f,
-	0x91, 0xa9, 0x01, 0x75, 0xa3, 0xf5, 0xb0, 0x4c, 0x42, 0x25, 0x63, 0xed, 0xa1, 0xd7, 0xf0, 0xff,
-	0x21, 0x2b, 0x27, 0xf8, 0x2d, 0x71, 0xcc, 0x6e, 0xf4, 0x48, 0x07, 0xcc, 0xcd, 0x78, 0xb1, 0x1f,
-	0x9c, 0x18, 0x0e, 0xda, 0x06, 0xff, 0x8b, 0xc2, 0xb5, 0xcc, 0x1f, 0xe8, 0x25, 0x0a, 0xa1, 0xad,
-	0x0a, 0xe4, 0x99, 0x4b, 0xd1, 0xd7, 0x84, 0x23, 0x5a, 0x8d, 0x04, 0x91, 0xe4, 0x9c, 0x8f, 0xcf,
-	0x0a, 0x7e, 0xcb, 0x48, 0x3a, 0x26, 0xb1, 0x0d, 0x0b, 0x48, 0x23, 0xab, 0xae, 0x14, 0x6b, 0x51,
-	0x29, 0xa2, 0xaf, 0x88, 0x4e, 0xe9, 0x5a, 0x12, 0xb5, 0x5f, 0x29, 0xa8, 0xb6, 0xad, 0x40, 0xaf,
-	0xa0, 0x63, 0x18, 0x95, 0xfa, 0x5b, 0x5f, 0xe5, 0x42, 0x3a, 0xd7, 0xf1, 0xd7, 0x1a, 0xb3, 0xea,
-	0xb2, 0x20, 0x97, 0xd9, 0xfb, 0x5b, 0x1e, 0xbb, 0x88, 0xe0, 0x33, 0x74, 0x2f, 0xe8, 0x37, 0x92,
-	0xaa, 0x9e, 0x97, 0xb5, 0xd4, 0x89, 0xc6, 0x38, 0xcf, 0x17, 0x89, 0xac, 0xd2, 0x7e, 0x4a, 0xd8,
-	0x22, 0x93, 0x53, 0xaa, 0x37, 0xae, 0x2a, 0xdb, 0x97, 0xa7, 0x3a, 0xd3, 0x07, 0x22, 0x68, 0x46,
-	0x71, 0xc2, 0xc8, 0xf5, 0xa4, 0xce, 0x32, 0x36, 0x2f, 0xa9, 0x82, 0xed, 0x18, 0x17, 0x29, 0xcf,
-	0xe9, 0xf7, 0x07, 0x27, 0xdc, 0x5f, 0xa9, 0xed, 0xd9, 0x4a, 0x1f, 0x4d, 0x99, 0x54, 0x4e, 0xe7,
-	0x05, 0xde, 0xc0, 0xd6, 0x11, 0x19, 0x89, 0x69, 0x29, 0x29, 0x2f, 0x4e, 0x8b, 0x8c, 0xeb, 0xf1,
-	0x28, 0x27, 0x74, 0x96, 0xd0, 0xac, 0x1b, 0x58, 0xef, 0xef, 0xb0, 0x11, 0xf4, 0xee, 0x3a, 0x3d,
-	0xb4, 0x09, 0x2d, 0xe9, 0x8e, 0xbd, 0x25, 0xb5, 0x12, 0xe6, 0xc0, 0x95, 0x12, 0xc1, 0x8f, 0x16,
-	0x6c, 0x2d, 0x1f, 0x03, 0x7a, 0x0c, 0x3e, 0xfe, 0x34, 0x74, 0x1f, 0x78, 0x78, 0x68, 0x8d, 0xc8,
-	0x7d, 0xe3, 0xe1, 0x48, 0x1b, 0x89, 0x8a, 0xb0, 0xb3, 0xec, 0x25, 0x43, 0x6b, 0x44, 0xfd, 0x35,
-	0x67, 0x98, 0x88, 0x54, 0x45, 0xb4, 0xad, 0x91, 0x0e, 0xad, 0x11, 0xf5, 0x3b, 0xce, 0x30, 0x11,
-	0x42, 0x45, 0xac, 0x5b, 0x43, 0x0c, 0xad, 0x11, 0xf5, 0x37, 0x9c, 0x11, 0x05, 0x3b, 0xf0, 0xe4,
-	0xb7, 0x63, 0x0b, 0x0e, 0x60, 0xe7, 0x8e, 0x16, 0xa0, 0x2d, 0xf0, 0xe4, 0xac, 0x7b, 0x6a, 0xb5,
-	0x5c, 0x64, 0xf4, 0xd3, 0x07, 0xf8, 0x78, 0x76, 0x75, 0xa8, 0x2e, 0xaf, 0x6a, 0xb8, 0x6a, 0xec,
-	0xfa, 0x55, 0x9d, 0x30, 0x5a, 0x4d, 0x10, 0xe8, 0x9e, 0xda, 0x4b, 0x38, 0xd8, 0x0d, 0xed, 0x1b,
-	0x10, 0xce, 0xde, 0x80, 0xf0, 0x58, 0xbf, 0x01, 0xc1, 0x7f, 0xe8, 0x0d, 0xf4, 0x2e, 0x28, 0x63,
-	0xea, 0x5b, 0x4c, 0x05, 0x59, 0x5c, 0x81, 0xe5, 0x2b, 0x77, 0x0f, 0xe0, 0x1d, 0xec, 0x36, 0x00,
-	0x27, 0x7a, 0x9c, 0x8e, 0xf4, 0xec, 0xa8, 0xaa, 0x35, 0xa2, 0x31, 0xed, 0x0f, 0x80, 0x44, 0xff,
-	0x02, 0x39, 0x87, 0x41, 0x03, 0x32, 0x1f, 0x7d, 0x37, 0xf9, 0x3d, 0xd3, 0x8e, 0x95, 0xfb, 0x70,
-	0x0f, 0xed, 0x14, 0xf6, 0x1a, 0xb4, 0xd5, 0x99, 0x36, 0xf3, 0xba, 0xe4, 0xfd, 0x19, 0x95, 0x74,
-	0x8c, 0x73, 0xf0, 0x2b, 0x00, 0x00, 0xff, 0xff, 0x74, 0x57, 0x60, 0x38, 0x99, 0x05, 0x00, 0x00,
+	// 510 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x9c, 0x53, 0xcd, 0x6e, 0xd3, 0x4c,
+	0x14, 0xfd, 0x6c, 0x37, 0x69, 0xbf, 0x9b, 0x28, 0x2d, 0xd3, 0x52, 0xac, 0xb0, 0x41, 0x5e, 0x21,
+	0x90, 0x1c, 0xd9, 0xe5, 0x05, 0x5a, 0xb5, 0x42, 0x28, 0xa0, 0x54, 0x2e, 0x65, 0xc1, 0x06, 0x8d,
+	0xed, 0xb1, 0x33, 0x60, 0x7b, 0xcc, 0x78, 0xac, 0x62, 0x9e, 0x84, 0xc7, 0x65, 0xfe, 0x92, 0xfe,
+	0xd0, 0x05, 0x62, 0x37, 0xe7, 0xcc, 0xf1, 0x39, 0x73, 0xef, 0xf5, 0x05, 0xc8, 0x58, 0x5d, 0x87,
+	0x2d, 0x67, 0x82, 0x21, 0xb7, 0x4d, 0xe7, 0xcf, 0x4b, 0xc6, 0xca, 0x8a, 0x2c, 0x34, 0x93, 0xf6,
+	0xc5, 0x82, 0xd4, 0xad, 0x18, 0x8c, 0x20, 0xb8, 0x86, 0xc9, 0xaa, 0x17, 0x84, 0x5f, 0x09, 0xde,
+	0x67, 0x02, 0xcd, 0x61, 0x2f, 0xab, 0x28, 0x69, 0x04, 0xcd, 0x7d, 0xe7, 0x85, 0xf3, 0x72, 0x94,
+	0x6c, 0x31, 0x3a, 0x86, 0x71, 0x27, 0x48, 0x2b, 0x6f, 0x5c, 0x7d, 0x63, 0x11, 0x42, 0xb0, 0x93,
+	0x63, 0x81, 0x7d, 0x4f, 0xb2, 0xd3, 0x44, 0x9f, 0x83, 0xb7, 0xe0, 0x2d, 0xc9, 0x80, 0x0e, 0xc0,
+	0xfb, 0x46, 0x06, 0xed, 0x34, 0x4d, 0xd4, 0x11, 0x85, 0x30, 0x92, 0xc1, 0xac, 0xd0, 0x1e, 0x93,
+	0xd8, 0x0f, 0xdb, 0x34, 0x3c, 0xa7, 0x5d, 0xc6, 0x89, 0x20, 0xef, 0x59, 0xb9, 0x6c, 0xd8, 0x4d,
+	0x45, 0xf2, 0x92, 0x24, 0x46, 0x16, 0x10, 0xf8, 0xff, 0xb4, 0x6a, 0xd7, 0xf8, 0x8c, 0x08, 0xac,
+	0x5e, 0x80, 0x15, 0xe8, 0xa4, 0xa3, 0x27, 0x1d, 0x2d, 0x42, 0x47, 0x30, 0x4a, 0xe5, 0x7d, 0x27,
+	0x4d, 0x15, 0x6d, 0x00, 0x7a, 0x05, 0x63, 0xed, 0xd1, 0xc9, 0x97, 0x79, 0x32, 0x0b, 0xa9, 0xac,
+	0x8b, 0xef, 0x3d, 0xae, 0xba, 0x55, 0x43, 0x56, 0xc5, 0xc7, 0x1b, 0x96, 0x58, 0x45, 0xf0, 0x15,
+	0x26, 0x1f, 0xe8, 0x0f, 0x92, 0xcb, 0x5e, 0xb4, 0xbd, 0x50, 0x41, 0x25, 0xae, 0xeb, 0xdb, 0x20,
+	0x83, 0x14, 0x9f, 0x93, 0xea, 0x36, 0xc9, 0x22, 0xf4, 0x7a, 0x53, 0x95, 0xa7, 0xab, 0x7a, 0xaa,
+	0x92, 0x3e, 0x11, 0x4e, 0x0b, 0x8a, 0xd3, 0x8a, 0x5c, 0xad, 0xfb, 0xa2, 0xa8, 0xb6, 0x25, 0x75,
+	0x70, 0x90, 0xe0, 0x26, 0x67, 0x35, 0xfd, 0xf9, 0xcf, 0x81, 0x8b, 0x07, 0xb5, 0x3d, 0x7b, 0xd0,
+	0x47, 0x5d, 0x26, 0x15, 0xc3, 0xb6, 0xc0, 0x6b, 0x98, 0x9d, 0x93, 0x8c, 0x0f, 0xad, 0xa0, 0xac,
+	0x79, 0xd7, 0x14, 0x4c, 0x8d, 0xad, 0x5d, 0xd3, 0x4d, 0xa0, 0x3e, 0xdf, 0xb1, 0x75, 0xff, 0xce,
+	0x36, 0x86, 0xa3, 0xc7, 0xa6, 0x87, 0xa6, 0xe0, 0x08, 0x3b, 0x76, 0x47, 0x28, 0xc4, 0xf5, 0xc0,
+	0x25, 0xe2, 0xc1, 0x2f, 0x07, 0x66, 0xf7, 0xc7, 0x80, 0xf6, 0xc1, 0xc3, 0x5f, 0x22, 0xfb, 0x81,
+	0x8b, 0x23, 0x43, 0xc4, 0xf6, 0x1b, 0x17, 0xc7, 0x8a, 0x48, 0xa5, 0xc2, 0xfc, 0x63, 0x6e, 0x1a,
+	0x19, 0x22, 0xf6, 0x77, 0x2c, 0xa1, 0x15, 0xb9, 0x54, 0x8c, 0x0c, 0x91, 0x47, 0x86, 0x88, 0xfd,
+	0xb1, 0x25, 0xb4, 0x82, 0x4b, 0xc5, 0xae, 0x21, 0x78, 0x64, 0x88, 0xd8, 0xdf, 0xb3, 0x44, 0x1c,
+	0x1c, 0xc2, 0x93, 0x3f, 0xc6, 0x16, 0x9c, 0xc0, 0xe1, 0x23, 0x2d, 0x40, 0x33, 0x70, 0xc5, 0xa6,
+	0x7b, 0xf2, 0x74, 0xbf, 0xc8, 0xf8, 0x0c, 0xe0, 0xf3, 0xf2, 0xf2, 0x54, 0xee, 0x94, 0xec, 0x37,
+	0x7a, 0x03, 0xbb, 0x97, 0x7d, 0x5a, 0xd1, 0x6e, 0x8d, 0xf6, 0x55, 0x4b, 0xef, 0xac, 0xdc, 0xfc,
+	0x38, 0x34, 0xfb, 0x19, 0x6e, 0xf6, 0x33, 0xbc, 0x50, 0xfb, 0x19, 0xfc, 0x97, 0x8e, 0x35, 0x73,
+	0xf2, 0x3b, 0x00, 0x00, 0xff, 0xff, 0x65, 0x56, 0xa4, 0xb0, 0xd1, 0x03, 0x00, 0x00,
 }

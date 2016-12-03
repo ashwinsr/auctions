@@ -8,13 +8,6 @@ import "google/protobuf/empty.proto";
 // The ZKPAuction service definition.
 service ZKPAuction {
   rpc Publish (OuterStruct) returns (google.protobuf.Empty) {}
-  
-  // TODO millionaire specific
-  rpc MillionaireAlphaBeta (AlphaBeta) returns (google.protobuf.Empty) {}
-  rpc MillionaireGammaDelta1 (MixedOutput) returns (google.protobuf.Empty) {}
-  rpc MillionaireGammaDelta2 (MixedOutput) returns (google.protobuf.Empty) {}
-  rpc MillionaireRandomizeOutput (RandomizedOutput) returns (google.protobuf.Empty) {}
-  rpc MillionaireDecryptionInfo (DecryptionInfo) returns (google.protobuf.Empty) {}
 }
 
 message OuterStruct {

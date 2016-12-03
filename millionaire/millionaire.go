@@ -1,100 +1,535 @@
 package millionaire
 
 import (
-	"math/big"
+	"encoding/json"
+	"flag"
+	"fmt"
 	"log"
+	"math/big"
+	"net"
+	"os"
+	"time"
+
+	"google.golang.org/grpc"
+
+	"github.com/ashwinsr/auctions/pb"
 	"github.com/ashwinsr/auctions/zkp"
+	"github.com/golang/protobuf/proto"
+	google_protobuf "github.com/golang/protobuf/ptypes/empty"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc/credentials"
+
+	// "net/http"
+	_ "net/http/pprof"
 )
 
-type PhiStruct struct {
-	Phis []big.Int
+// keeps state
+type state struct {
+	myPrivateKey big.Int
+	myPublicKey  big.Int
+	keys         []big.Int
+	publicKey    big.Int
+	currRound    int
+
+	// TODO millionaire specific
+	myAlphasBetas                 *AlphaBetaStruct
+	theirAlphasBetas              *AlphaBetaStruct
+	myGammasDeltas                *millionaire.GammaDeltaStruct
+	theirGammasDeltas             *millionaire.GammaDeltaStruct
+	myExponentiatedGammasDeltas   *millionaire.GammaDeltaStruct
+	theirExponentiatedGammasDelta *millionaire.GammaDeltaStruct
+	phisBeforeExponentiation      *millionaire.PhiStruct
+	myPhis                        *millionaire.PhiStruct
+	theirPhis                     *millionaire.PhiStruct
 }
 
-type GammaDeltaStruct struct {
-	Gammas, Deltas []big.Int
-}
+// ROUND 1 FUNCTIONS
 
-// Computes PI_{d=j+1}^{k} (a1_d/a2_d)^2^d-2
-// where a1 and a2 are either both alpha arrays
-// or beta
-func multiplyDivideExponentiate(a1 []big.Int, a2 []big.Int, j int, p big.Int) big.Int {
-	product := *big.NewInt(1)
-	var temp, tempExp big.Int
+// TODO delete comment
+/*
+ * 1. Generates a private/public key pair
+ * 2. Generates zero-knowledge-proof of private key
+ * 3. Publishes the public key with zero-knowledge proof of private key
+ * 4. Puts our own public key in state.keys
+ * 5. Receives n public keys from keyChan, puts them in state.keys
+ * 6. Calculates the final public key, and stores into state.
+ */
+func computeRound1(state interface{}) interface{} {
+	s := getState(state)
 
-	for d := j + 1; uint(d) < zkp.K_Mill; d++ {
-		temp.ModInverse(&a2[d], &p)
-		temp.Mul(&a1[d], &temp)
+	// Generate private key
+	s.myPrivateKey.Rand(zkp.RandGen, zkp.Q)
+	// Calculate public key
+	s.myPublicKey.Exp(zkp.G, &s.myPrivateKey, zkp.P)
 
-		// because d is considered an array index, when used for the actual math,
-		// we must add 1 to it
-		tempD := big.NewInt(int64(d + 1))
-		tempExp.Exp(zkp.Two, tempD, nil)
-		tempExp.Sub(&tempExp, zkp.Two)
-		// tempExp.Mod(&tempExp, &p)
+	// Generate zkp of private key
+	t, r := zkp.DiscreteLogKnowledge(s.myPrivateKey, *zkp.G, *zkp.P, *zkp.Q)
+	// Create proto structure of zkp
+	zkpPrivKey := &pb.DiscreteLogKnowledge{T: t.Bytes(), R: r.Bytes()}
 
-		temp.Exp(&temp, &tempExp, &p)
-
-		product.Mul(&product, &temp)
-		product.Mod(&product, &p)
+	key := pb.Key{
+		key:   s.myPublicKey,
+		proof: zkpPrivKey,
 	}
 
-	return product
+	return key
 }
 
-// Whoever calls this function: make sure you understand what bigY means.
-func MillionaireCalculateGammaDelta(alpha_1 []big.Int, alpha_2 []big.Int,
-	beta_1 []big.Int, beta_2 []big.Int, bigY big.Int, p big.Int) *GammaDeltaStruct {
-	var gds GammaDeltaStruct
+func checkRound1(result *pb.OuterStruct) (err error) {
+	var key pb.Key
 
-	for j := 0; uint(j) < zkp.K_Mill; j++ {
-		var gammaJ, deltaJ big.Int
-		var temp, temp2, temp3, temp4 big.Int
+	var k, t, r big.Int
 
-		// Compute gammaJ = Y*alpha_2j / alpha_1j
-		temp.ModInverse(&alpha_1[j], &p)
-		temp.Mul(&alpha_2[j], &temp)
-		temp.Mul(&temp, &bigY)
-		gammaJ.Mod(&temp, &p)
-
-		// Compute gammaJ = gammaJ * multipleDivideExponentiate
-		temp2 = multiplyDivideExponentiate(alpha_1, alpha_2, j, p)
-		gammaJ.Mul(&temp2, &gammaJ)
-		gammaJ.Mod(&gammaJ, &p)
-
-		// Compute deltaJ = beta_2j/beta_1j
-		temp3.ModInverse(&beta_1[j], &p)
-		temp3.Mul(&beta_2[j], &temp3)
-		deltaJ.Mod(&temp3, &p)
-
-		// Compute deltaJ = deltaJ * multiplyDivideExponentiate
-		temp4 = multiplyDivideExponentiate(beta_1, beta_2, j, p)
-		deltaJ.Mul(&temp4, &deltaJ)
-		deltaJ.Mod(&deltaJ, &p)
-
-		log.Printf("At j=%v, gamma = %v and delta = %v\n", j, gammaJ, deltaJ)
-
-		gds.Gammas = append(gds.Gammas, gammaJ)
-		gds.Deltas = append(gds.Deltas, deltaJ)
+	err = proto.Unmarshal(result.GetData(), &key)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal pb.Key.\n")
 	}
 
-	return &gds
+	k.SetBytes(key.GetKey())
+	t.SetBytes(key.GetProof().GetT())
+	r.SetBytes(key.GetProof().GetR())
+
+	err = zkp.CheckDiscreteLogKnowledgeProof(*zkp.G, k, t, r, *zkp.P, *zkp.Q)
+	if err != nil {
+		log.Fatalf("Received incorrect zero-knowledge proof. Key=%v, t=%v, r=%v", k, t, r)
+	}
+
+	return
 }
 
-func MillionaireCalculateV(gamma1 big.Int, gamma2 big.Int, phi1 big.Int, phi2 big.Int, p big.Int) big.Int {
-	var temp1, temp2, v big.Int
+func receiveRound1(state interface{}, results []*pb.OuterStruct) {
+	s := getState(state)
+	var key pb.Key
 
-	// Calculate gamma1 * gamma2 mod p
-	temp1.Mul(&gamma1, &gamma2)
-	temp1.Mod(&temp1, &p)
+	s.keys = append(s.keys, s.myPublicKey)
 
-	// Calculate 1/(phi1 * phi2) mod p
-	temp2.Mul(&phi1, &phi2)
-	temp2.Mod(&temp2, &p)
-	temp2.ModInverse(&temp2, &p)
+	for i := 0; i < len(results); i++ {
+		err = proto.Unmarshal(results[i].GetData(), &key)
+		if err != nil {
+			log.Fatalf("Failed to unmarshal pb.Key.\n")
+		}
+		var k big.Int
+		k.SetBytes(key.key)
+		s.keys = append(s.keys, k)
+	}
 
-	// Calculate v
-	v.Mul(&temp1, &temp2)
-	v.Mod(&v, &p)
+	// Calculating final public key
+	// TODO SHOULD THIS BE MOD P? Probably doesn't matter, but just for computational practicality
+	s.publicKey.Set(zkp.One)
+	for _, key := range s.keys {
+		s.publicKey.Mul(&s.publicKey, &key)
+		s.publicKey.Mod(&s.publicKey, zkp.P)
+	}
 
-	return v
+	log.Printf("Calculated public key: %v\n", s.publicKey.String())
+}
+
+// ROUND 2 FUNCTIONS
+
+func computeRound2(state interface{}) interface{} {
+	s := getState(state)
+
+	var alphas, betas [][]byte
+	var alphasInts, betasInts []big.Int
+
+	var proofs []*pb.EqualsOneOfTwo
+
+	var j uint
+	for j = 0; j < zkp.K_Mill; j++ {
+		var alphaJ, betaJ, rJ big.Int
+		rJ.Rand(zkp.RandGen, zkp.Q)
+
+		log.Printf("r_%v,%v = %v\n", *id, j, rJ.String())
+
+		// get the j-th bit of bid
+		Bij := (((*bid) >> j) & 1)
+		log.Printf("B_%v,%v = %v", *id, j, Bij)
+
+		// calculate alpha_j
+		// log.Printf("Public key: %v, Rj: %v, P: %v\n", s.publicKey, rJ, *zkp.P)
+		alphaJ.Exp(&s.publicKey, &rJ, zkp.P) // TODO mod P?
+		if Bij == 1 {
+			alphaJ.Mul(&alphaJ, zkp.Y_Mill)
+			alphaJ.Mod(&alphaJ, zkp.P)
+		}
+
+		// calculate beta_j
+		betaJ.Exp(zkp.G, &rJ, zkp.P)
+		// log.Printf("alpha_%v: %v\n", j, alphaJ)
+		// log.Printf("beta_%v: %v\n", j, betaJ)
+
+		alphas = append(alphas, alphaJ.Bytes())
+		alphasInts = append(alphasInts, alphaJ)
+		betas = append(betas, betaJ.Bytes())
+		betasInts = append(betasInts, betaJ)
+
+		var m big.Int
+		if Bij == 1 {
+			a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 :=
+				zkp.EncryptedValueIsOneOfTwo(m, s.publicKey, rJ, *zkp.G,
+					*zkp.Y_Mill, *zkp.P, *zkp.Q)
+
+			proofs = append(proofs, &pb.EqualsOneOfTwo{
+				A_1: a_1.Bytes(),
+				A_2: a_2.Bytes(),
+				B_1: b_1.Bytes(),
+				B_2: b_2.Bytes(),
+				D_1: d_1.Bytes(),
+				D_2: d_2.Bytes(),
+				R_1: r_1.Bytes(),
+				R_2: r_2.Bytes(),
+			})
+		}
+
+		return &pb.AlphaBeta{
+			Alphas: alphas,
+			Betas:  betas,
+			Proofs: proofs,
+		}
+	}
+}
+
+func checkRound2(result *pb.OuterStruct) (err error) {
+	var in pb.AlphaBeta
+
+	err = proto.Unmarshal(result.GetData(), &in)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal pb.AlphaBeta.\n")
+	}
+
+	if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != zkp.K_Mill {
+		log.Fatalf("Incorrect number of shit")
+	}
+
+	for i := 0; i < len(in.Alphas); i++ {
+		var alpha, beta, a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 big.Int
+		alpha.SetBytes(in.Alphas[i])
+		beta.SetBytes(in.Betas[i])
+		a_1.SetBytes(in.Proofs[i].A_1)
+		a_2.SetBytes(in.Proofs[i].A_2)
+		b_1.SetBytes(in.Proofs[i].B_1)
+		b_2.SetBytes(in.Proofs[i].B_2)
+		d_1.SetBytes(in.Proofs[i].D_1)
+		d_2.SetBytes(in.Proofs[i].D_2)
+		r_1.SetBytes(in.Proofs[i].R_1)
+		r_2.SetBytes(in.Proofs[i].R_2)
+
+		if err := zkp.CheckEncryptedValueIsOneOfTwo(alpha, beta, *zkp.P, *zkp.Q,
+			a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2,
+			*zkp.G, s.publicKey, *zkp.Y_Mill); err != nil {
+			log.Fatalf("Received incorrect zero-knowledge proof for alpha/beta")
+		}
+	}
+
+	return
+}
+
+func receiveRound2(state interface{}, results []*pb.OuterStruct) {
+	s := getState(state)
+	var alphabeta pb.AlphaBeta
+	s.theirAlphasBetas = &AlphaBetaStruct{}
+
+	// Wait for alphas and betas of other client
+	for i := 0; i < len(clients); i++ {
+		err = proto.Unmarshal(results[i].GetData(), &alphabeta)
+		if err != nil {
+			log.Fatalf("Failed to unmarshal pb.AlphaBeta.\n")
+		}
+		r := results[i]
+		for j := 0; j < len(alphabeta.GetAlphas()); j++ {
+			s.theirAlphasBetas.alphas = append(s.theirAlphasBetas.alphas, *new(big.Int).SetBytes(alphaBeta.GetAlphas()[j]))
+			s.theirAlphasBetas.betas = append(s.theirAlphasBetas.betas, *new(big.Int).SetBytes(alphaBeta.GetBetas()[j]))
+		}
+	}
+}
+
+// ROUND 3 FUNCTIONS
+
+func computeRound3(state interface{}) interface{} {
+	s := getState(state)
+
+	var gds *millionaire.GammaDeltaStruct
+	if *id == 0 {
+		gds = MillionaireCalculateGammaDelta(s.myAlphasBetas.alphas, s.theirAlphasBetas.alphas,
+			s.myAlphasBetas.betas, s.theirAlphasBetas.betas, *zkp.Y_Mill, *zkp.P)
+	} else {
+		gds = MillionaireCalculateGammaDelta(s.theirAlphasBetas.alphas, s.myAlphasBetas.alphas,
+			s.theirAlphasBetas.betas, s.myAlphasBetas.betas, *zkp.Y_Mill, *zkp.P)
+	}
+	// TODO for now just set both
+	s.myGammasDeltas = gds
+	s.theirGammasDeltas = gds
+
+	log.Printf("Gammas/deltas: %v\n", gds)
+
+	return nil
+}
+
+func checkRound3(result *pb.OuterStruct) (err error) {
+	return nil
+}
+
+func receiveRound3(state interface{}, results []*pb.OuterStruct) {
+	return
+}
+
+// ROUND 4 FUNCTIONS
+
+func computeRound4(state interface{}) interface{} {
+	return nil
+}
+
+func checkRound5(result *pb.OuterStruct) (err error) {
+	return nil
+}
+
+func receiveRound5(state interface{}, results []*pb.OuterStruct) {
+	return
+}
+
+// ROUND 5 FUNCTIONS
+
+func computeRound5(state interface{}) interface{} {
+	s := getState(state)
+	var proofs []*pb.DiscreteLogEquality
+
+	var exponentiatedGammas, exponentiatedDeltas [][]byte
+
+	// compute exponentiated gamma and delta
+	// TODO for now myGammasDeltas
+	for j := 0; j < int(zkp.K_Mill); j++ {
+		// log.Println("Beginning random exponentiation2")
+
+		// this is our random exponent
+		var m big.Int
+		m.Rand(zkp.RandGen, zkp.Q)
+
+		var newGamma, newDelta big.Int
+		newGamma.Exp(&s.myGammasDeltas.Gammas[j], &m, zkp.P)
+		newDelta.Exp(&s.myGammasDeltas.Deltas[j], &m, zkp.P)
+		// log.Println("Beginning random exponentiation3")
+
+		log.Printf("m_%v = %v, gamma_%v = %v, delta_%v = %v\n", j, m.String(), j, newGamma.String(), j, newDelta.String())
+
+		s.myExponentiatedGammasDeltas.Gammas = append(
+			s.myExponentiatedGammasDeltas.Gammas, newGamma)
+
+		s.myExponentiatedGammasDeltas.Deltas = append(
+			s.myExponentiatedGammasDeltas.Deltas, newDelta)
+
+		// for the protobuf struct
+		exponentiatedGammas = append(exponentiatedGammas, newGamma.Bytes())
+		exponentiatedDeltas = append(exponentiatedDeltas, newDelta.Bytes())
+
+		// to pass the bases to the zkp generator
+		var gs []big.Int
+		gs = append(gs, s.myGammasDeltas.Gammas[j])
+		gs = append(gs, s.myGammasDeltas.Deltas[j])
+		// log.Println("Beginning random exponentiation4")
+
+		// create proof and add it to proof list
+		ts, r := zkp.DiscreteLogEquality(m, gs, *zkp.P, *zkp.Q)
+
+		// TODO remove
+		//checking the proof here before we send it
+		var results, results2 []big.Int
+		var a, b big.Int
+		a.Exp(&gs[0], &m, zkp.P)
+		b.Exp(&gs[1], &m, zkp.P)
+		results = append(results, a)
+		results = append(results, b)
+		results2 = append(results2, s.myExponentiatedGammasDeltas.Gammas[j])
+		results2 = append(results2, s.myExponentiatedGammasDeltas.Deltas[j])
+		err := zkp.CheckDiscreteLogEqualityProof(gs, results, ts, r, *zkp.P, *zkp.Q)
+		// log.Printf("Creating proof.\nBases=%v\nExponent=%v\nResults=%v\nResults2=%v\nTs=%vn,R=%v\n", gs, m, results, results2, ts, r)
+		if err != nil {
+			log.Printf("WHAT THE heck %v\n", err)
+		} else {
+			// log.Printf("Yay!!! Correct exponentiatedGammas exponentiatedDeltas proof")
+		}
+		// TODO done
+
+		// log.Println("Beginning random exponentiation5")
+		var proof pb.DiscreteLogEquality
+		for _, t := range ts {
+			proof.Ts = append(proof.Ts, t.Bytes())
+		}
+
+		// log.Println("Beginning random exponentiation6")
+		proof.R = r.Bytes()
+		proofs = append(proofs, &proof)
+
+		// log.Println("Beginning random exponentiation7")
+	}
+
+	return &pb.RandomizedOutput{
+		Gammas: exponentiatedGammas,
+		Deltas: exponentiatedDeltas,
+		Proofs: proofs,
+	}
+}
+
+func checkRound5(result *pb.OuterStruct) (err error) {
+	var in pb.RandomizedOutput
+
+	err = proto.Unmarshal(result.GetData(), &in)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal pb.RandomizedOutput.\n")
+	}
+
+	if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != zkp.K_Mill {
+		log.Fatalf("Incorrect number of shit4")
+	}
+
+	for j := 0; j < len(in.Gammas); j++ {
+		var gamma, delta big.Int
+		gamma.SetBytes(in.Gammas[j])
+		delta.SetBytes(in.Deltas[j])
+
+		var bases, results, ts []big.Int
+		results = append(results, gamma)
+		results = append(results, delta)
+
+		// set proof values
+		var r big.Int
+		r.SetBytes(in.Proofs[j].R)
+		for _, t := range in.Proofs[j].Ts {
+			var t_temp big.Int
+			t_temp.SetBytes(t)
+			ts = append(ts, t_temp)
+		}
+
+		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+			log.Fatalf("Received incorrect zero-knowledge proof for exponentiated gammas/deltas")
+		}
+	}
+}
+
+func receiveRound5(state interface{}, results []*pb.OuterStruct) {
+	s := getState(state)
+	var randomizedoutput pb.RandomizedOutput
+
+	s.theirExponentiatedGammasDelta = &GammaDeltaStruct{}
+
+	// Wait for alphas and betas of other client
+	for i := 0; i < len(clients); i++ {
+		err = proto.Unmarshal(results[i].GetData(), &randomizedoutput)
+		if err != nil {
+			log.Fatalf("Failed to unmarshal pb.RandomizedOutput.\n")
+		}
+		r := results[i]
+		for j := 0; j < len(alphabeta.GetGammas()); j++ {
+			s.theirExponentiatedGammasDelta.gammas = append(s.theirExponentiatedGammasDelta.gammas, *new(big.Int).SetBytes(randomizedoutput.GetGammas()[j]))
+			s.theirExponentiatedGammasDelta.deltas = append(s.theirExponentiatedGammasDelta.deltas, *new(big.Int).SetBytes(randomizedoutput.GetDeltas()[j]))
+		}
+	}
+}
+
+// ROUND 6 FUNCTIONS
+
+func computeRound6(state interface{}) interface{} {
+	s := getState(state)
+	// log.Println("Beginning decryption")
+
+	var proofs []*pb.DiscreteLogEquality
+
+	var phis [][]byte
+
+	s.myPhis = new(PhiStruct)
+	s.phisBeforeExponentiation = new(PhiStruct)
+
+	// compute exponentiated gamma and delta
+	// TODO for now myGammasDeltas
+	for i := 0; i < int(zkp.K_Mill); i++ {
+		// calculate phi
+		var phi, phi2 big.Int
+		phi.Mul(&s.myExponentiatedGammasDeltas.Deltas[i], &s.theirExponentiatedGammasDelta.Deltas[i])
+		phi.Mod(&phi, zkp.P)
+		// before exponentiating, add it to our list for checking the ZKP
+		phi2.Set(&phi)
+		s.phisBeforeExponentiation.Phis = append(s.phisBeforeExponentiation.Phis, phi2)
+
+		log.Printf("Before exponentiation, phi_%v = %v\n", i, phi2.String())
+
+		phi.Exp(&phi, &s.myPrivateKey, zkp.P)
+		s.myPhis.Phis = append(s.myPhis.Phis, phi)
+
+		log.Printf("phi_%v = %v\n", i, phi.String())
+
+		// for the protobuf struct
+		phis = append(phis, phi.Bytes())
+
+		// to pass the bases to the zkp generator
+		var gs []big.Int
+		gs = append(gs, phi2)
+		gs = append(gs, *zkp.G)
+
+		// create proof and add it to proof list
+		ts, r := zkp.DiscreteLogEquality(s.myPrivateKey, gs, *zkp.P, *zkp.Q)
+		// log.Printf("Creating proof.\nBases=%v\nExponent=%v\nTs=%vn,R=%v\n", gs, s.myPrivateKey, ts, r)
+
+		var proof pb.DiscreteLogEquality
+		for _, t := range ts {
+			proof.Ts = append(proof.Ts, t.Bytes())
+		}
+
+		proof.R = r.Bytes()
+		proofs = append(proofs, &proof)
+	}
+
+	return &pb.DecryptionInfo{
+		Phis:   phis,
+		Proofs: proofs,
+	}
+}
+
+func checkRound6(result *pb.OuterStruct) (err error) {
+	var in pb.DecryptionInfo
+
+	err = proto.Unmarshal(result.GetData(), &in)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal pb.DecryptionInfo.\n")
+	}
+
+	if len(in.Phis) != len(in.Proofs) || uint(len(in.Proofs)) != zkp.K_Mill {
+		log.Printf("len of phis=%v, len of proofs=%v, k=%v\n", len(in.Phis), uint(len(in.Proofs)), zkp.K_Mill)
+		log.Fatalf("Incorrect number of shit5")
+	}
+
+	for j := 0; j < len(in.Phis); j++ {
+		var phi big.Int
+		phi.SetBytes(in.Phis[j])
+
+		var bases, results, ts []big.Int
+		// proof equality of logarithms of the received phi and their public key
+		bases = append(bases, *zkp.G)
+		results = append(results, phi)
+
+		// set proof values
+		var r big.Int
+		r.SetBytes(in.Proofs[j].R)
+		for _, t := range in.Proofs[j].Ts {
+			var t_temp big.Int
+			t_temp.SetBytes(t)
+			ts = append(ts, t_temp)
+		}
+
+		// log.Printf("Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
+		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+			log.Fatalf("Received incorrect zero-knowledge proof for phis")
+		}
+	}
+}
+
+func receiveRound6(state interface{}, results []*pb.OuterStruct) {
+	s := getState(state)
+	// Calculate the final shit (division + which one is bigger)
+	for j := 0; j < int(zkp.K_Mill); j++ {
+		v := MillionaireCalculateV(s.myExponentiatedGammasDeltas.Gammas[j], s.theirExponentiatedGammasDelta.Gammas[j], s.myPhis.Phis[j], s.theirPhis.Phis[j], *zkp.P)
+		log.Printf("v_%v = %v\n", j, v)
+		if v.Cmp(zkp.One) == 0 {
+			log.Fatalf("ID 0 is the winner\n")
+		}
+	}
+	log.Fatalf("ID 1 is the winner\n")
 }
