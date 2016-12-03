@@ -100,6 +100,7 @@ func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
 
 	err = proto.Unmarshal(result.GetData(), &key)
 	if err != nil {
+		fmt.Println(err)
 		log.Fatalf("Failed to unmarshal pb.Key.\n")
 	}
 
@@ -127,6 +128,7 @@ func receiveRound1(state interface{}, results []*pb.OuterStruct) {
 		}
 		err := proto.Unmarshal(results[i].GetData(), &key)
 		if err != nil {
+			fmt.Println(err)
 			log.Fatalf("Failed to unmarshal pb.Key.\n")
 		}
 		var k big.Int
@@ -186,22 +188,33 @@ func computeRound2(state interface{}) proto.Message {
 
 		var m big.Int
 		if Bij == 1 {
-			a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 :=
-				zkp.EncryptedValueIsOneOfTwo(m, s.publicKey, rJ, *zkp.G,
-					*zkp.Y_Mill, *zkp.P, *zkp.Q)
-
-			proofs = append(proofs, &pb.EqualsOneOfTwo{
-				A_1: a_1.Bytes(),
-				A_2: a_2.Bytes(),
-				B_1: b_1.Bytes(),
-				B_2: b_2.Bytes(),
-				D_1: d_1.Bytes(),
-				D_2: d_2.Bytes(),
-				R_1: r_1.Bytes(),
-				R_2: r_2.Bytes(),
-			})
+			m.Set(zkp.Y_Mill)
+		} else {
+			m.Set(zkp.One)
 		}
+		a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 :=
+			zkp.EncryptedValueIsOneOfTwo(m, s.publicKey, rJ, *zkp.G,
+				*zkp.Y_Mill, *zkp.P, *zkp.Q)
+
+		proofs = append(proofs, &pb.EqualsOneOfTwo{
+			A_1: a_1.Bytes(),
+			A_2: a_2.Bytes(),
+			B_1: b_1.Bytes(),
+			B_2: b_2.Bytes(),
+			D_1: d_1.Bytes(),
+			D_2: d_2.Bytes(),
+			R_1: r_1.Bytes(),
+			R_2: r_2.Bytes(),
+		})
 	}
+
+	s.myAlphasBetas = &AlphaBetaStruct{
+		alphas: alphasInts,
+		betas:  betasInts,
+	}
+
+	fmt.Println("Length of proofs")
+	fmt.Println(len(proofs))
 
 	return &pb.AlphaBeta{
 		Alphas: alphas,
@@ -218,6 +231,12 @@ func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 	if err != nil {
 		log.Fatalf("Failed to unmarshal pb.AlphaBeta.\n")
 	}
+
+	fmt.Println(len(in.Alphas))
+	fmt.Println(len(in.Betas))
+	fmt.Println(len(in.Proofs))
+	fmt.Println(uint(len(in.Proofs)))
+	fmt.Println(zkp.K_Mill)
 
 	if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != zkp.K_Mill {
 		log.Fatalf("Incorrect number of shit")
@@ -284,8 +303,6 @@ func computeRound3(state interface{}) proto.Message {
 	s.myGammasDeltas = gds
 	s.theirGammasDeltas = gds
 
-	log.Printf("Gammas/deltas: %v\n", gds)
-
 	return nil
 }
 
@@ -318,6 +335,8 @@ func computeRound5(state interface{}) proto.Message {
 	var proofs []*pb.DiscreteLogEquality
 
 	var exponentiatedGammas, exponentiatedDeltas [][]byte
+
+	s.myExponentiatedGammasDeltas = &GammaDeltaStruct{}
 
 	// compute exponentiated gamma and delta
 	// TODO for now myGammasDeltas
@@ -521,7 +540,7 @@ func checkRound6(state interface{}, result *pb.OuterStruct) (err error) {
 
 	if len(in.Phis) != len(in.Proofs) || uint(len(in.Proofs)) != zkp.K_Mill {
 		log.Printf("len of phis=%v, len of proofs=%v, k=%v\n", len(in.Phis), uint(len(in.Proofs)), zkp.K_Mill)
-		log.Fatalf("Incorrect number of shit5")
+		log.Fatalf("Incorrect number of shit6")
 	}
 
 	for j := 0; j < len(in.Phis); j++ {
@@ -544,6 +563,7 @@ func checkRound6(state interface{}, result *pb.OuterStruct) (err error) {
 
 		// log.Printf("Checking proof.\nBases=%v\nResults=%v\nTs=%vn,R=%v\n", bases, results, ts, r)
 		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+			fmt.Println(err)
 			log.Fatalf("Received incorrect zero-knowledge proof for phis")
 		}
 	}
