@@ -102,6 +102,8 @@ func (s *FpState) checkRound2(result *pb.OuterStruct) (err error) {
 		}
 	}
 
+	// TODO Akshay remember to check the other proof here, in.proof
+
 	return
 }
 
@@ -248,19 +250,19 @@ func computeRound2(FpState interface{}) interface{} {
 	
 	var logEqualityProof pb.DiscreteLogEquality
 	for _, t := range ts {
-		proof.Ts = append(proof.Ts, t.Bytes())
+		logEqualityProof.Ts = append(logEqualityProof.Ts, t.Bytes())
 	}
 	logEqualityProof.R = r.Bytes()
 
 	var round1Proof pb.Round1
 
 	for j = 0; j < K; j++ {
-		round1Proof.Proofs =  append(proof.Proofs, proofs[j])
-		round1Proof.Alphas = append(proof.Alphas, alphasInts[j])
-		round1Proof.Betas = append(proof.Betas, betasInts[j])
+		round1Proof.Proofs =  append(round1Proof.Proofs, proofs[j])
+		round1Proof.Alphas = append(round1Proof.Alphas, alphasInts[j])
+		round1Proof.Betas = append(round1Proof.Betas, betasInts[j])
 	}
-	round1Proof.Proof = round1Proof
+	round1Proof.Proof = &logEqualityProof
 
-	return round1Proof
+	return &round1Proof
 }
 
