@@ -222,7 +222,9 @@ func checkAll(state interface{}, check CheckFn) {
 
 	for i := 0; i < len(clients); i++ {
 		idx := <-receivedIdChan
+		dataLock.Lock()
 		result := data[idx]
+		dataLock.Unlock()
 		go func() {
 			defer wg.Done()
 			err := check(state, result)
