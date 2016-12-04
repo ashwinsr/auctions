@@ -352,7 +352,7 @@ func computeRound5(state interface{}) proto.Message {
 		newDelta.Exp(&s.myGammasDeltas.Deltas[j], &m, zkp.P)
 		// log.Println("Beginning random exponentiation3")
 
-		log.Printf("m_%v = %v, gamma_%v = %v, delta_%v = %v\n", j, m.String(), j, newGamma.String(), j, newDelta.String())
+		log.Printf("Computed m_%v = %v, gamma_%v = %v, delta_%v = %v\n", j, m.String(), j, newGamma.String(), j, newDelta.String())
 
 		s.myExponentiatedGammasDeltas.Gammas = append(
 			s.myExponentiatedGammasDeltas.Gammas, newGamma)
@@ -429,6 +429,8 @@ func checkRound5(state interface{}, result *pb.OuterStruct) (err error) {
 		gamma.SetBytes(in.Gammas[j])
 		delta.SetBytes(in.Deltas[j])
 
+		log.Printf("RECEIVED gamma_%v = %v, delta_%v = %v\n", j, gamma.String(), j, delta.String())
+
 		var bases, results, ts []big.Int
 		results = append(results, gamma)
 		results = append(results, delta)
@@ -496,12 +498,12 @@ func computeRound6(state interface{}) proto.Message {
 		phi2.Set(&phi)
 		s.phisBeforeExponentiation.Phis = append(s.phisBeforeExponentiation.Phis, phi2)
 
-		log.Printf("Before exponentiation, phi_%v = %v\n", i, phi2.String())
+		log.Printf("COMPUTED: Before exponentiation, phi_%v = %v\n", i, phi2.String())
 
 		phi.Exp(&phi, &s.myPrivateKey, zkp.P)
 		s.myPhis.Phis = append(s.myPhis.Phis, phi)
 
-		log.Printf("phi_%v = %v\n", i, phi.String())
+		log.Printf("COMPUTED: phi_%v = %v\n", i, phi.String())
 
 		// for the protobuf struct
 		phis = append(phis, phi.Bytes())
@@ -531,6 +533,7 @@ func computeRound6(state interface{}) proto.Message {
 }
 
 func checkRound6(state interface{}, result *pb.OuterStruct) (err error) {
+	s := getState(state)
 	var in pb.DecryptionInfo
 
 	err = proto.Unmarshal(result.GetData(), &in)
@@ -547,10 +550,14 @@ func checkRound6(state interface{}, result *pb.OuterStruct) (err error) {
 		var phi big.Int
 		phi.SetBytes(in.Phis[j])
 
+		log.Printf("RECEIVED: phi_%v = %v\n", j, phi.String())
+
 		var bases, results, ts []big.Int
 		// proof equality of logarithms of the received phi and their public key
+		bases = append(bases, s.phisBeforeExponentiation.Phis[j])
 		bases = append(bases, *zkp.G)
 		results = append(results, phi)
+		results = append(results, s.keys[1]) // their public key!
 
 		// set proof values
 		var r big.Int
@@ -573,9 +580,27 @@ func checkRound6(state interface{}, result *pb.OuterStruct) (err error) {
 
 func receiveRound6(state interface{}, results []*pb.OuterStruct) {
 	s := getState(state)
+	var decInfo pb.DecryptionInfo
+	err := proto.Unmarshal(results[1-*id].GetData(), &decInfo) // just need their result
+	if err != nil {
+		log.Fatalf("Failed to unmarshal pb.DecryptionInfo.\n")
+	}
+	log.Printf("%v\n", decInfo)
 	// Calculate the final shit (division + which one is bigger)
 	for j := 0; j < int(zkp.K_Mill); j++ {
-		v := MillionaireCalculateV(s.myExponentiatedGammasDeltas.Gammas[j], s.theirExponentiatedGammasDelta.Gammas[j], s.myPhis.Phis[j], s.theirPhis.Phis[j], *zkp.P)
+		// deleteMe1 := s.myExponentiatedGammasDeltas.Gammas[j]
+		// deleteMe2 := s.theirExponentiatedGammasDelta.Gammas[j]
+		// deleteMe3 := s.myPhis.Phis[j]
+		// deleteMe4 := s.theirPhis.Phis[j] // TODO theirPhis unused
+		// _ = deleteMe1
+		// _ = deleteMe2
+		// _ = deleteMe3
+		// _ = deleteMe4
+
+		var phi big.Int
+		phi.SetBytes(decInfo.Phis[j])
+
+		v := MillionaireCalculateV(s.myExponentiatedGammasDeltas.Gammas[j], s.theirExponentiatedGammasDelta.Gammas[j], s.myPhis.Phis[j], phi, *zkp.P)
 		log.Printf("v_%v = %v\n", j, v)
 		if v.Cmp(zkp.One) == 0 {
 			log.Fatalf("ID 0 is the winner\n")

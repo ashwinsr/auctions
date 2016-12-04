@@ -37,6 +37,7 @@ var (
 	id           int
 	numRound     int32 = 0
 	data         []*pb.OuterStruct
+	dataLock     sync.Mutex
 	clientsReady sync.Once
 )
 
@@ -64,20 +65,22 @@ var (
 type server struct{}
 
 func (s *server) Publish(ctx context.Context, in *pb.OuterStruct) (*google_protobuf.Empty, error) {
-	fmt.Println("Publish Publish Publish")
+	// fmt.Println("Publish Publish Publish")
 
 	go func() {
-		fmt.Println("Before wedding")
+		// fmt.Println("Before wedding")
 		clientsReady.Do(func() {
-			fmt.Println("In the wedding")
+			// fmt.Println("In the wedding")
 			<-isReady
 		})
-		fmt.Println("After wedding")
+		// fmt.Println("After wedding")
 
 		fmt.Println(in.GetClientid())
 
 		// TODO THIS IS FUCKING STUPID BUT OK FOR NOW
+		dataLock.Lock()
 		data[in.GetClientid()] = in
+		dataLock.Unlock()
 
 		receivedIdChan <- in.GetClientid()
 	}()
