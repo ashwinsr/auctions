@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package main;
+
+import "github.com/ashwinsr/auctions/common_pb/common.proto";
+
+// TODO millionaire specific
+message AlphaBeta {
+  repeated bytes alphas = 1;
+  repeated bytes betas = 2;
+
+  repeated common_pb.EqualsOneOfTwo proofs = 3;
+}
+
+// TODO millionaire specific
+message MixedOutput {
+  repeated bytes gammas = 1;
+  repeated bytes deltas = 2;
+
+  common_pb.VerifiableShuffle proof = 3;
+}
+
+// TODO millionaire specific
+message RandomizedOutput {
+  repeated bytes gammas = 1;
+  repeated bytes deltas = 2;
+
+  repeated common_pb.DiscreteLogEquality proofs = 3;
+}
+
+// TODO millionaire specific
+message DecryptionInfo {
+  repeated bytes phis = 1;
+
+  repeated common_pb.DiscreteLogEquality proofs = 2;
+}

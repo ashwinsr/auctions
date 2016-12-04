@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package pb;
+
+import "google/protobuf/empty.proto";
+import "github.com/ashwinsr/auctions/common_pb/common.proto";
+
+// The ZKPAuction service definition.
+service ZKPAuction {
+  rpc Publish (common_pb.OuterStruct) returns (google.protobuf.Empty) {}
+}
