@@ -10,9 +10,6 @@ import (
 	"github.com/ashwinsr/auctions/lib"
 	"github.com/ashwinsr/auctions/zkp"
 	"github.com/golang/protobuf/proto"
-
-	// "net/http"
-	_ "net/http/pprof"
 )
 
 type PhiStruct struct {
@@ -57,9 +54,7 @@ func getState(state_ interface{}) (s *state) {
 }
 
 var (
-	id = flag.Int("id", -1, "ID")
-
-	// TODO millionaire specific
+	id  = flag.Int("id", -1, "ID")
 	bid = flag.Uint("bid", 0, "Amount of money")
 )
 
@@ -634,8 +629,4 @@ func main() {
 	}
 
 	lib.Register(rounds, myState)
-
-	// TODO do this better
-	for {
-	}
 }
