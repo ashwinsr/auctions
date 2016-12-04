@@ -12,7 +12,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/ashwinsr/auctions/pb"
+	pb "github.com/ashwinsr/auctions/common_pb"
+	lib_pb "github.com/ashwinsr/auctions/lib/pb"
 	"github.com/golang/protobuf/proto"
 	google_protobuf "github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
@@ -47,7 +48,7 @@ var (
  * onto the next round, just wait in the channel until we are ready.
  */
 var (
-	clients []pb.ZKPAuctionClient
+	clients []lib_pb.ZKPAuctionClient
 	// Publish
 	// isReady      chan struct{}
 	receivedIdChan chan int32 = make(chan int32)
@@ -61,7 +62,7 @@ var (
 	hostsFileName = flag.String("hosts", "../hosts.json", "JSON file with lists of hosts to communicate with")
 )
 
-// server is used to implement pb.ZKPAuctionServer
+// server is used to implement lib_pb.ZKPAuctionServer
 type server struct{}
 
 func (s *server) Publish(ctx context.Context, in *pb.OuterStruct) (*google_protobuf.Empty, error) {
@@ -75,14 +76,14 @@ func (s *server) Publish(ctx context.Context, in *pb.OuterStruct) (*google_proto
 		})
 		// fmt.Println("After wedding")
 
-		fmt.Println(in.GetClientid())
+		fmt.Println(in.Clientid)
 
 		// TODO THIS IS FUCKING STUPID BUT OK FOR NOW
 		dataLock.Lock()
-		data[in.GetClientid()] = in
+		data[in.Clientid] = in
 		dataLock.Unlock()
 
-		receivedIdChan <- in.GetClientid()
+		receivedIdChan <- in.Clientid
 	}()
 
 	return &google_protobuf.Empty{}, nil
@@ -101,7 +102,7 @@ func RunServer(localHost string) {
 	opts = []grpc.ServerOption{grpc.Creds(cert)}
 
 	s := grpc.NewServer(opts...)
-	pb.RegisterZKPAuctionServer(s, &server{})
+	lib_pb.RegisterZKPAuctionServer(s, &server{})
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
@@ -169,7 +170,7 @@ func InitClients(hosts []string, myAddr string) {
 			log.Fatalf("Did not connect (to host %v): %v", host, err)
 		}
 		// defer conn.Close() TODO: This needs to happen at somepoint, but not here
-		c := pb.NewZKPAuctionClient(conn)
+		c := lib_pb.NewZKPAuctionClient(conn)
 
 		clients = append(clients, c)
 		fmt.Println("LOOP END")

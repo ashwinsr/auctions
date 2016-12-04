@@ -6,8 +6,8 @@ import (
 	"log"
 	"math/big"
 
+	pb "github.com/ashwinsr/auctions/common_pb"
 	"github.com/ashwinsr/auctions/lib"
-	"github.com/ashwinsr/auctions/pb"
 	"github.com/ashwinsr/auctions/zkp"
 	"github.com/golang/protobuf/proto"
 
@@ -98,15 +98,15 @@ func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
 
 	var k, t, r big.Int
 
-	err = proto.Unmarshal(result.GetData(), &key)
+	err = proto.Unmarshal(result.Data, &key)
 	if err != nil {
 		fmt.Println(err)
 		log.Fatalf("Failed to unmarshal pb.Key.\n")
 	}
 
-	k.SetBytes(key.GetKey())
-	t.SetBytes(key.GetProof().GetT())
-	r.SetBytes(key.GetProof().GetR())
+	k.SetBytes(key.Key)
+	t.SetBytes(key.GetProof().T)
+	r.SetBytes(key.GetProof().R)
 
 	err = zkp.CheckDiscreteLogKnowledgeProof(*zkp.G, k, t, r, *zkp.P, *zkp.Q)
 	if err != nil {
@@ -126,7 +126,7 @@ func receiveRound1(state interface{}, results []*pb.OuterStruct) {
 		if i == *id {
 			continue
 		}
-		err := proto.Unmarshal(results[i].GetData(), &key)
+		err := proto.Unmarshal(results[i].Data, &key)
 		if err != nil {
 			fmt.Println(err)
 			log.Fatalf("Failed to unmarshal pb.Key.\n")
@@ -216,7 +216,7 @@ func computeRound2(state interface{}) proto.Message {
 	fmt.Println("Length of proofs")
 	fmt.Println(len(proofs))
 
-	return &pb.AlphaBeta{
+	return &AlphaBeta{
 		Alphas: alphas,
 		Betas:  betas,
 		Proofs: proofs,
@@ -225,11 +225,11 @@ func computeRound2(state interface{}) proto.Message {
 
 func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 	s := getState(state)
-	var in pb.AlphaBeta
+	var in AlphaBeta
 
-	err = proto.Unmarshal(result.GetData(), &in)
+	err = proto.Unmarshal(result.Data, &in)
 	if err != nil {
-		log.Fatalf("Failed to unmarshal pb.AlphaBeta.\n")
+		log.Fatalf("Failed to unmarshal AlphaBeta.\n")
 	}
 
 	fmt.Println(len(in.Alphas))
@@ -267,7 +267,7 @@ func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 
 func receiveRound2(state interface{}, results []*pb.OuterStruct) {
 	s := getState(state)
-	var alphabeta pb.AlphaBeta
+	var alphabeta AlphaBeta
 	s.theirAlphasBetas = &AlphaBetaStruct{}
 
 	// Wait for alphas and betas of other client
@@ -275,13 +275,13 @@ func receiveRound2(state interface{}, results []*pb.OuterStruct) {
 		if i == *id {
 			continue
 		}
-		err := proto.Unmarshal(results[i].GetData(), &alphabeta)
+		err := proto.Unmarshal(results[i].Data, &alphabeta)
 		if err != nil {
-			log.Fatalf("Failed to unmarshal pb.AlphaBeta.\n")
+			log.Fatalf("Failed to unmarshal AlphaBeta.\n")
 		}
-		for j := 0; j < len(alphabeta.GetAlphas()); j++ {
-			s.theirAlphasBetas.alphas = append(s.theirAlphasBetas.alphas, *new(big.Int).SetBytes(alphabeta.GetAlphas()[j]))
-			s.theirAlphasBetas.betas = append(s.theirAlphasBetas.betas, *new(big.Int).SetBytes(alphabeta.GetBetas()[j]))
+		for j := 0; j < len(alphabeta.Alphas); j++ {
+			s.theirAlphasBetas.alphas = append(s.theirAlphasBetas.alphas, *new(big.Int).SetBytes(alphabeta.Alphas[j]))
+			s.theirAlphasBetas.betas = append(s.theirAlphasBetas.betas, *new(big.Int).SetBytes(alphabeta.Betas[j]))
 		}
 	}
 }
@@ -405,7 +405,7 @@ func computeRound5(state interface{}) proto.Message {
 		// log.Println("Beginning random exponentiation7")
 	}
 
-	return &pb.RandomizedOutput{
+	return &RandomizedOutput{
 		Gammas: exponentiatedGammas,
 		Deltas: exponentiatedDeltas,
 		Proofs: proofs,
@@ -413,11 +413,11 @@ func computeRound5(state interface{}) proto.Message {
 }
 
 func checkRound5(state interface{}, result *pb.OuterStruct) (err error) {
-	var in pb.RandomizedOutput
+	var in RandomizedOutput
 
-	err = proto.Unmarshal(result.GetData(), &in)
+	err = proto.Unmarshal(result.Data, &in)
 	if err != nil {
-		log.Fatalf("Failed to unmarshal pb.RandomizedOutput.\n")
+		log.Fatalf("Failed to unmarshal RandomizedOutput.\n")
 	}
 
 	if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != zkp.K_Mill {
@@ -454,7 +454,7 @@ func checkRound5(state interface{}, result *pb.OuterStruct) (err error) {
 
 func receiveRound5(state interface{}, results []*pb.OuterStruct) {
 	s := getState(state)
-	var randomizedoutput pb.RandomizedOutput
+	var randomizedoutput RandomizedOutput
 
 	s.theirExponentiatedGammasDelta = &GammaDeltaStruct{}
 
@@ -463,13 +463,13 @@ func receiveRound5(state interface{}, results []*pb.OuterStruct) {
 		if i == *id {
 			continue
 		}
-		err := proto.Unmarshal(results[i].GetData(), &randomizedoutput)
+		err := proto.Unmarshal(results[i].Data, &randomizedoutput)
 		if err != nil {
-			log.Fatalf("Failed to unmarshal pb.RandomizedOutput.\n")
+			log.Fatalf("Failed to unmarshal RandomizedOutput.\n")
 		}
-		for j := 0; j < len(randomizedoutput.GetGammas()); j++ {
-			s.theirExponentiatedGammasDelta.Gammas = append(s.theirExponentiatedGammasDelta.Gammas, *new(big.Int).SetBytes(randomizedoutput.GetGammas()[j]))
-			s.theirExponentiatedGammasDelta.Deltas = append(s.theirExponentiatedGammasDelta.Deltas, *new(big.Int).SetBytes(randomizedoutput.GetDeltas()[j]))
+		for j := 0; j < len(randomizedoutput.Gammas); j++ {
+			s.theirExponentiatedGammasDelta.Gammas = append(s.theirExponentiatedGammasDelta.Gammas, *new(big.Int).SetBytes(randomizedoutput.Gammas[j]))
+			s.theirExponentiatedGammasDelta.Deltas = append(s.theirExponentiatedGammasDelta.Deltas, *new(big.Int).SetBytes(randomizedoutput.Deltas[j]))
 		}
 	}
 }
@@ -526,7 +526,7 @@ func computeRound6(state interface{}) proto.Message {
 		proofs = append(proofs, &proof)
 	}
 
-	return &pb.DecryptionInfo{
+	return &DecryptionInfo{
 		Phis:   phis,
 		Proofs: proofs,
 	}
@@ -534,11 +534,11 @@ func computeRound6(state interface{}) proto.Message {
 
 func checkRound6(state interface{}, result *pb.OuterStruct) (err error) {
 	s := getState(state)
-	var in pb.DecryptionInfo
+	var in DecryptionInfo
 
-	err = proto.Unmarshal(result.GetData(), &in)
+	err = proto.Unmarshal(result.Data, &in)
 	if err != nil {
-		log.Fatalf("Failed to unmarshal pb.DecryptionInfo.\n")
+		log.Fatalf("Failed to unmarshal DecryptionInfo.\n")
 	}
 
 	if len(in.Phis) != len(in.Proofs) || uint(len(in.Proofs)) != zkp.K_Mill {
@@ -580,10 +580,10 @@ func checkRound6(state interface{}, result *pb.OuterStruct) (err error) {
 
 func receiveRound6(state interface{}, results []*pb.OuterStruct) {
 	s := getState(state)
-	var decInfo pb.DecryptionInfo
-	err := proto.Unmarshal(results[1-*id].GetData(), &decInfo) // just need their result
+	var decInfo DecryptionInfo
+	err := proto.Unmarshal(results[1-*id].Data, &decInfo) // just need their result
 	if err != nil {
-		log.Fatalf("Failed to unmarshal pb.DecryptionInfo.\n")
+		log.Fatalf("Failed to unmarshal DecryptionInfo.\n")
 	}
 	log.Printf("%v\n", decInfo)
 	// Calculate the final shit (division + which one is bigger)
