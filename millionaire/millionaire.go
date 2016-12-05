@@ -57,10 +57,9 @@ func getState(state_ interface{}) (s *state) {
 }
 
 var (
-	id = flag.Int("id", -1, "ID")
-
-	// TODO millionaire specific
+    myAddress = flag.String("address", "localhost:1234", "address")
 	bid = flag.Uint("bid", 0, "Amount of money")
+    id = flag.Int("id", -1, "ID")
 )
 
 // ROUND 1 FUNCTIONS
@@ -609,13 +608,25 @@ func receiveRound6(state interface{}, results []*pb.OuterStruct) {
 	log.Fatalf("ID 1 is the winner\n")
 }
 
+func getID(hosts []string) int {
+    for i, host := range hosts {
+        if host == *myAddress {
+			return i
+        }
+    }
+
+	return -1
+}
+
 func main() {
 	flag.Parse()
 
 	myState := &state{}
-	lib.Init(*id)
 
 	hosts := lib.GetHosts()
+	*id = getID(hosts)
+
+	lib.Init(*id)
 	myAddr := hosts[*id]
 
 	fmt.Println(myAddr)

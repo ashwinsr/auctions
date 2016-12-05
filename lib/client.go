@@ -9,7 +9,9 @@ import (
 	"os"
 	"sync"
 	"time"
+    "io/ioutil"
 
+    "crypto/x509"
 	"google.golang.org/grpc"
 
 	pb "github.com/ashwinsr/auctions/common_pb"
@@ -59,7 +61,7 @@ var (
 // TODO delete
 
 var (
-	hostsFileName = flag.String("hosts", "../hosts.json", "JSON file with lists of hosts to communicate with")
+	hostsFileName = flag.String("hosts", "../hosts.auc", "JSON file with lists of hosts to communicate with")
 )
 
 // server is used to implement lib_pb.ZKPAuctionServer
@@ -125,18 +127,33 @@ func GetHosts() []string {
 	return hosts.Hosts
 }
 
-func getClientCertificate() credentials.TransportCredentials {
-	certFile := fmt.Sprintf("../certs/%v.pem", id)
-	cert, err := credentials.NewClientTLSFromFile(certFile, "")
-	if err != nil {
-		log.Fatalf("Could not load client TLS certificate: %v", err)
-	}
+func getRootCertificate() []byte {
+    cert, err := ioutil.ReadFile("../certs/ca.cert")
+    if err != nil {
+        log.Fatalf("Could not load root CA certificate.")
+    }
 
-	return cert
+    return cert
+}
+
+func getClientCertificate() credentials.TransportCredentials {
+    caCert := getRootCertificate()
+
+    certFileName := fmt.Sprintf("../certs/%v.cert", id)
+    clientCert, err := ioutil.ReadFile(certFileName)
+    if err != nil {
+        log.Fatalf("Could not load client TLS certificate: %v", err)
+    }
+
+    pool := x509.NewCertPool()
+    pool.AppendCertsFromPEM(caCert)
+    pool.AppendCertsFromPEM(clientCert)
+
+    return credentials.NewClientTLSFromCert(pool, "")
 }
 
 func getServerCertificate() credentials.TransportCredentials {
-	certFile := fmt.Sprintf("../certs/%v.pem", id)
+	certFile := fmt.Sprintf("../certs/%v.cert", id)
 	keyFile := fmt.Sprintf("../certs/%v.key", id)
 	cert, err := credentials.NewServerTLSFromFile(certFile, keyFile)
 	if err != nil {
