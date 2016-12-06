@@ -8,6 +8,7 @@ import (
 
 type GetIntFunc func(i int) *big.Int
 
+// comment
 // multiplies getter(start) * getter(start + 1) * ... * getter(end) mod P
 func Multiply(start, end int, p *big.Int, getter GetIntFunc) *big.Int {
 	var result big.Int
