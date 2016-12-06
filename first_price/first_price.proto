@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package main;
+
+import "github.com/ashwinsr/auctions/common_pb/common.proto";
+
+message Round1 {
+  	repeated bytes alphas = 1;
+  	repeated bytes betas = 2;
+	
+	repeated common_pb.EqualsOneOfTwo proofs = 3;
+	common_pb.DiscreteLogEquality proof = 4;
+}

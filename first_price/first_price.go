@@ -1,9 +1,27 @@
 package main
 
 import (
+	"flag"
+	"fmt"
+	"log"
+	"math/big"
+
+	pb "github.com/ashwinsr/auctions/common_pb"
+	"github.com/ashwinsr/auctions/lib"
+	"github.com/ashwinsr/auctions/zkp"
+	"github.com/golang/protobuf/proto"
 )
 
-K := 27
+var (
+	id  = flag.Int("id", -1, "ID")
+	bid = flag.Uint("bid", 0, "Amount of money")
+)
+
+var K uint = 27
+
+type AlphaBetaStruct struct {
+	alphas, betas []big.Int
+}
 
 type FpState struct {
 	myPrivateKey big.Int
@@ -12,55 +30,69 @@ type FpState struct {
 	publicKey    big.Int
 	currRound    int
 
-	// TODO millionaire specific
-	AlphasBetas                  	[]*AlphaBetaStruct
-	GammasDeltas                	[]*millionaire.GammaDeltaStruct
-
-	myExponentiatedGammasDeltas   *millionaire.GammaDeltaStruct
-	theirExponentiatedGammasDelta *millionaire.GammaDeltaStruct
-	phisBeforeExponentiation      *millionaire.PhiStruct
-	myPhis                        *millionaire.PhiStruct
-	theirPhis                     *millionaire.PhiStruct
+	AlphasBetas []*AlphaBetaStruct // TODO Akshay remember to initialize
 }
 
 func main() {
+	flag.Parse()
 
-	myState = &state{}
-	myState.AlphasBetas = make([]AlphaBetaStruct, len(hosts) + 1)
+	myState := &FpState{}
+	lib.Init(*id)
 
+	hosts := lib.GetHosts()
+	myAddr := hosts[*id]
+
+	fmt.Println(myAddr)
+
+	go lib.RunServer(myAddr)
+
+	lib.InitClients(hosts, myAddr)
+
+	rounds := []lib.Round{
+		{computeRound1, checkRound1, receiveRound1},
+		{computeRound2, checkRound2, receiveRound2},
+		// {computeRound3, checkRound3, receiveRound3},
+		// {computeRound4, checkRound4, receiveRound4},
+		// {computeRound5, checkRound5, receiveRound5},
+		// {computeRound6, checkRound6, receiveRound6},
+	}
+
+	lib.Register(rounds, myState)
 }
 
 func getFpState(state interface{}) (s *FpState) {
-	s, err := FpState.(FpState)
-	if err != nil {
-		log.Fatalf("Failed to typecast state.\n")
+	s, ok := state.(*FpState)
+	if !ok {
+		log.Fatalf("Failed to typecast FpState.\n")
 	}
+	return
 }
 
-func computeArrayRangeProduct(arr []big.Int, uint start, uint end) big.Int {
-	profuct = zkp.One
-	
+func computeArrayRangeProduct(arr []big.Int, start, end uint) big.Int {
+	var product big.Int
+	product.Set(zkp.One)
+
 	for i := start; i < end; i++ {
-		product.Mul(product, arr[i])
-		product.Mod(product, zkp.P) // TODO Check Mod
+		product.Mul(&product, &arr[i])
+		product.Mod(&product, zkp.P) // TODO Check Mod
 	}
-	
+
 	return product
 }
 
-func (s *FpState) checkRound1(result *pb.OuterStruct) (err error) {
+func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
 	var key pb.Key
 
 	var k, t, r big.Int
 
-	err = proto.Unmarshal(result.GetData(), &key)
+	err = proto.Unmarshal(result.Data, &key)
 	if err != nil {
 		log.Fatalf("Failed to unmarshal pb.Key.\n")
 	}
 
-	k.SetBytes(key.GetKey())
-	t.SetBytes(key.GetProof().GetT())
-	r.SetBytes(key.GetProof().GetR())
+	k.SetBytes(key.Key)
+	t.SetBytes(key.GetProof().T)
+	r.SetBytes(key.GetProof().R)
 
 	err = zkp.CheckDiscreteLogKnowledgeProof(*zkp.G, k, t, r, *zkp.P, *zkp.Q)
 	if err != nil {
@@ -70,10 +102,11 @@ func (s *FpState) checkRound1(result *pb.OuterStruct) (err error) {
 	return
 }
 
-func (s *FpState) checkRound2(result *pb.OuterStruct) (err error) {
-	var in pb.Round1
+func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
+	s := getFpState(state)
+	var in Round1
 
-	err = proto.Unmarshal(result.GetData(), &in)
+	err = proto.Unmarshal(result.Data, &in)
 	if err != nil {
 		log.Fatalf("Failed to unmarshal pb.Round1.\n")
 	}
@@ -107,13 +140,6 @@ func (s *FpState) checkRound2(result *pb.OuterStruct) (err error) {
 	return
 }
 
-func getFpState(FpState interface{}) (s *FpState) {
-	s, err := FpState.(FpState)
-	if err != nil {
-		log.Fatalf("Failed to typecast FpState.\n")
-	}
-}
-
 func receiveRound1(FpState interface{}, results []*pb.OuterStruct) {
 	s := getFpState(FpState)
 	var key pb.Key
@@ -121,12 +147,15 @@ func receiveRound1(FpState interface{}, results []*pb.OuterStruct) {
 	s.keys = append(s.keys, s.myPublicKey)
 
 	for i := 0; i < len(results); i++ {
-		err = proto.Unmarshal(results[i].GetData(), &key)
+		if i == *id {
+			continue
+		}
+		err := proto.Unmarshal(results[i].Data, &key)
 		if err != nil {
 			log.Fatalf("Failed to unmarshal pb.Key.\n")
 		}
 		var k big.Int
-		k.SetBytes(key.key)
+		k.SetBytes(key.Key)
 		s.keys = append(s.keys, k)
 	}
 
@@ -144,20 +173,23 @@ func receiveRound1(FpState interface{}, results []*pb.OuterStruct) {
 func receiveRound2(FpState interface{}, results []*pb.OuterStruct) {
 	s := getFpState(FpState)
 
-	var round1 pb.Round1
+	var round1 Round1
 
 	// Atore all received alphas and betas
-	for i := 0; i < len(clients); i++ {
-		err = proto.Unmarshal(results[i].GetData(), &round1)
+	for i := 0; i < len(results); i++ {
+		if i == *id {
+			continue
+		}
+		err := proto.Unmarshal(results[i].Data, &round1)
 		if err != nil {
-			log.Fatalf("Failed to unmarshal pb.Round1.\n")
+			log.Fatalf("Failed to unmarshal Round1.\n")
 		}
 
 		var alphas, betas []big.Int
 
 		for j := 0; j < len(round1.Alphas); j++ {
-			alphas = append(alphas, round1.Alphas[j])
-			betas = append(betas, round1.Betas[j])
+			alphas = append(alphas, *new(big.Int).SetBytes(round1.Alphas[j]))
+			betas = append(betas, *new(big.Int).SetBytes(round1.Betas[j]))
 		}
 
 		s.AlphasBetas[results[i].Clientid].alphas = alphas
@@ -165,9 +197,8 @@ func receiveRound2(FpState interface{}, results []*pb.OuterStruct) {
 	}
 }
 
-
-func computeRound1(FpState interface{}) interface{} {
-  	s := getFpState(FpState)
+func computeRound1(FpState interface{}) proto.Message {
+	s := getFpState(FpState)
 
 	// Generate private key
 	s.myPrivateKey.Rand(zkp.RandGen, zkp.Q)
@@ -179,31 +210,30 @@ func computeRound1(FpState interface{}) interface{} {
 	// Create proto structure of zkp
 	zkpPrivKey := &pb.DiscreteLogKnowledge{T: t.Bytes(), R: r.Bytes()}
 
-	key := pb.Key{
-		key: s.myPublicKey,
-		proof: zkpPrivKey,
+	return &pb.Key{
+		Key:   s.myPublicKey.Bytes(),
+		Proof: zkpPrivKey,
 	}
-  
-  return key
 }
 
-func computeRound2(FpState interface{}) interface{} {
+func computeRound2(FpState interface{}) proto.Message {
 	s := getFpState(FpState)
 
 	var alphasInts, betasInts []big.Int
 	var proofs []*pb.EqualsOneOfTwo
-	sumR := zkp.Zero
+	var sumR big.Int
+	sumR.Set(zkp.Zero)
 	var j uint
 	for j = 0; j < K; j++ {
 		var alphaJ, betaJ, rJ big.Int
-		
+
 		rJ.Rand(zkp.RandGen, zkp.Q)
 		sumR.Add(&sumR, &rJ)
-		
+
 		alphaJ.Exp(&s.publicKey, &rJ, zkp.P) // TODO mod P?
 
 		if j == *bid {
-			alphaJ.Mul(&alphaJ, zkp.Y_Mill)	
+			alphaJ.Mul(&alphaJ, zkp.Y_Mill)
 			alphaJ.Mod(&alphaJ, zkp.P)
 		}
 
@@ -220,7 +250,7 @@ func computeRound2(FpState interface{}) interface{} {
 		} else {
 			m.Set(zkp.One)
 		}
-		
+
 		a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 :=
 			zkp.EncryptedValueIsOneOfTwo(m, s.publicKey, rJ, *zkp.G,
 				*zkp.Y_Mill, *zkp.P, *zkp.Q)
@@ -237,32 +267,31 @@ func computeRound2(FpState interface{}) interface{} {
 		})
 	}
 
-	s.AlphasBetas.Alphas[*id] = alphasInts
-	s.AlphasBetas.Betas[*id] = betasInts
+	s.AlphasBetas[*id].alphas = alphasInts
+	s.AlphasBetas[*id].betas = betasInts
 
-	sumR.Mod(&sumR, zkp.Z)
+	sumR.Mod(&sumR, zkp.Z) // TODO Akshay what is Z?
 
 	var gs []big.Int
-	gs.append(gs, s.publicKey)
-	gs.append(gs, zkp.G)
+	gs = append(gs, s.publicKey)
+	gs = append(gs, *zkp.G)
 
 	ts, r := zkp.DiscreteLogEquality(sumR, gs, *zkp.P, *zkp.Q)
-	
+
 	var logEqualityProof pb.DiscreteLogEquality
 	for _, t := range ts {
 		logEqualityProof.Ts = append(logEqualityProof.Ts, t.Bytes())
 	}
 	logEqualityProof.R = r.Bytes()
 
-	var round1Proof pb.Round1
+	var round1Proof Round1
 
 	for j = 0; j < K; j++ {
-		round1Proof.Proofs =  append(round1Proof.Proofs, proofs[j])
-		round1Proof.Alphas = append(round1Proof.Alphas, alphasInts[j])
-		round1Proof.Betas = append(round1Proof.Betas, betasInts[j])
+		round1Proof.Proofs = append(round1Proof.Proofs, proofs[j])
+		round1Proof.Alphas = append(round1Proof.Alphas, alphasInts[j].Bytes())
+		round1Proof.Betas = append(round1Proof.Betas, betasInts[j].Bytes())
 	}
 	round1Proof.Proof = &logEqualityProof
 
 	return &round1Proof
 }
-

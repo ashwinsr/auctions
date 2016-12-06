@@ -10,9 +10,6 @@ import (
 	"github.com/ashwinsr/auctions/lib"
 	"github.com/ashwinsr/auctions/zkp"
 	"github.com/golang/protobuf/proto"
-
-	// "net/http"
-	_ "net/http/pprof"
 )
 
 type PhiStruct struct {
@@ -57,9 +54,9 @@ func getState(state_ interface{}) (s *state) {
 }
 
 var (
-    myAddress = flag.String("address", "localhost:1234", "address")
-	bid = flag.Uint("bid", 0, "Amount of money")
-    id = flag.Int("id", -1, "ID")
+	myAddress = flag.String("address", "localhost:1234", "address")
+	bid       = flag.Uint("bid", 0, "Amount of money")
+	id        = flag.Int("id", -1, "ID")
 )
 
 // ROUND 1 FUNCTIONS
@@ -609,11 +606,11 @@ func receiveRound6(state interface{}, results []*pb.OuterStruct) {
 }
 
 func getID(hosts []string) int {
-    for i, host := range hosts {
-        if host == *myAddress {
+	for i, host := range hosts {
+		if host == *myAddress {
 			return i
-        }
-    }
+		}
+	}
 
 	return -1
 }
@@ -645,8 +642,4 @@ func main() {
 	}
 
 	lib.Register(rounds, myState)
-
-	// TODO do this better
-	for {
-	}
 }
