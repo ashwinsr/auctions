@@ -11,3 +11,10 @@ message Round1 {
 	repeated common_pb.EqualsOneOfTwo proofs = 3;
 	common_pb.DiscreteLogEquality proof = 4;
 }
+
+message Round2 {
+	repeated bytes gammas = 1;
+	repeated bytes deltas = 2;
+
+	repeated common_pb.DiscreteLogEquality proofs = 3;
+}

@@ -13,14 +13,19 @@ import (
 )
 
 var (
-	id  = flag.Int("id", -1, "ID")
-	bid = flag.Uint("bid", 0, "Amount of money")
+	myAddress = flag.String("address", "localhost:1234", "address")
+	id        = new(int)
+	bid       = flag.Uint("bid", 0, "Amount of money")
 )
 
 var K uint = 27
 
 type AlphaBetaStruct struct {
 	alphas, betas []big.Int
+}
+
+type GammaDeltaStruct struct {
+	gammas, deltas []big.Int
 }
 
 type FpState struct {
@@ -30,17 +35,31 @@ type FpState struct {
 	publicKey    big.Int
 	currRound    int
 
-	AlphasBetas []*AlphaBetaStruct // TODO Akshay remember to initialize
+	AlphasBetas                      []*AlphaBetaStruct // TODO Akshay remember to initialize
+	GammasDeltasBeforeExponentiation []*GammaDeltaStruct
+	GammasDeltasAfterExponentiation  []*GammaDeltaStruct
+}
+
+func getID(hosts []string) int {
+	for i, host := range hosts {
+		if host == *myAddress {
+			return i
+		}
+	}
+
+	return -1
 }
 
 func main() {
 	flag.Parse()
 
 	myState := &FpState{}
-	lib.Init(*id)
 
 	hosts := lib.GetHosts()
+	*id = getID(hosts)
+
 	myAddr := hosts[*id]
+	lib.Init(*id)
 
 	fmt.Println(myAddr)
 
@@ -49,8 +68,8 @@ func main() {
 	lib.InitClients(hosts, myAddr)
 
 	rounds := []lib.Round{
+		{computePrologue, checkPrologue, receivePrologue},
 		{computeRound1, checkRound1, receiveRound1},
-		{computeRound2, checkRound2, receiveRound2},
 		// {computeRound3, checkRound3, receiveRound3},
 		// {computeRound4, checkRound4, receiveRound4},
 		// {computeRound5, checkRound5, receiveRound5},
@@ -80,19 +99,18 @@ func computeArrayRangeProduct(arr []big.Int, start, end uint) big.Int {
 	return product
 }
 
-func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
+func checkPrologue(state interface{}, result *pb.OuterStruct) (err error) {
 	var key pb.Key
-
-	var k, t, r big.Int
 
 	err = proto.Unmarshal(result.Data, &key)
 	if err != nil {
 		log.Fatalf("Failed to unmarshal pb.Key.\n")
 	}
 
+	t, r := pb.DestructDiscreteLogKnowledge(key.Proof)
+
+	var k big.Int
 	k.SetBytes(key.Key)
-	t.SetBytes(key.GetProof().T)
-	r.SetBytes(key.GetProof().R)
 
 	err = zkp.CheckDiscreteLogKnowledgeProof(*zkp.G, k, t, r, *zkp.P, *zkp.Q)
 	if err != nil {
@@ -102,33 +120,26 @@ func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
 	return
 }
 
-func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
+func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
 	s := getFpState(state)
 	var in Round1
 
 	err = proto.Unmarshal(result.Data, &in)
 	if err != nil {
-		log.Fatalf("Failed to unmarshal pb.Round1.\n")
+		log.Fatalf("Failed to unmarshal Round1.\n")
 	}
 
 	if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != K {
 		log.Fatalf("Incorrect number of shit")
 	}
 
-	for i := 0; i < len(in.Alphas); i++ {
-		var alpha, beta, a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 big.Int
-		alpha.SetBytes(in.Alphas[i])
-		beta.SetBytes(in.Betas[i])
-		a_1.SetBytes(in.Proofs[i].A_1)
-		a_2.SetBytes(in.Proofs[i].A_2)
-		b_1.SetBytes(in.Proofs[i].B_1)
-		b_2.SetBytes(in.Proofs[i].B_2)
-		d_1.SetBytes(in.Proofs[i].D_1)
-		d_2.SetBytes(in.Proofs[i].D_2)
-		r_1.SetBytes(in.Proofs[i].R_1)
-		r_2.SetBytes(in.Proofs[i].R_2)
+	alphas := pb.ByteSliceToBigIntSlice(in.Alphas)
+	betas := pb.ByteSliceToBigIntSlice(in.Betas)
 
-		if err := zkp.CheckEncryptedValueIsOneOfTwo(alpha, beta, *zkp.P, *zkp.Q,
+	for i := 0; i < len(in.Alphas); i++ {
+		a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 := pb.DestructIsOneOfTwo(in.Proofs[i])
+
+		if err := zkp.CheckEncryptedValueIsOneOfTwo(alphas[i], betas[i], *zkp.P, *zkp.Q,
 			a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2,
 			*zkp.G, s.publicKey, *zkp.Y_Mill); err != nil {
 			log.Fatalf("Received incorrect zero-knowledge proof for alpha/beta")
@@ -140,7 +151,42 @@ func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 	return
 }
 
-func receiveRound1(FpState interface{}, results []*pb.OuterStruct) {
+func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
+	s := getFpState(state)
+	var in Round2
+
+	err = proto.Unmarshal(result.Data, &in)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal Round2.\n")
+	}
+
+	if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != K {
+		log.Fatalf("Incorrect number of shit")
+	}
+
+	gammas := pb.ByteSliceToBigIntSlice(in.Gammas)
+	deltas := pb.ByteSliceToBigIntSlice(in.Deltas)
+
+	for i := 0; i < len(in.Gammas); i++ {
+		ts, r := pb.DestructDiscreteLogEquality(in.Proofs[i])
+
+		// bases are their gammas and deltas before exponentiation!
+		bases := []big.Int{
+			s.GammasDeltasBeforeExponentiation[result.Clientid].gammas[i],
+			s.GammasDeltasBeforeExponentiation[result.Clientid].deltas[i],
+		}
+		results := []big.Int{gammas[i], deltas[i]}
+
+		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+			log.Fatalf("Received incorrect zero-knowledge proof for alpha/beta")
+		}
+	}
+
+	return
+}
+
+// TODO decompose! Can be used in both millionaires and auction
+func receivePrologue(FpState interface{}, results []*pb.OuterStruct) {
 	s := getFpState(FpState)
 	var key pb.Key
 
@@ -170,12 +216,12 @@ func receiveRound1(FpState interface{}, results []*pb.OuterStruct) {
 	log.Printf("Calculated public key: %v\n", s.publicKey.String())
 }
 
-func receiveRound2(FpState interface{}, results []*pb.OuterStruct) {
+func receiveRound1(FpState interface{}, results []*pb.OuterStruct) {
 	s := getFpState(FpState)
 
 	var round1 Round1
 
-	// Atore all received alphas and betas
+	// Store all received alphas and betas
 	for i := 0; i < len(results); i++ {
 		if i == *id {
 			continue
@@ -185,19 +231,36 @@ func receiveRound2(FpState interface{}, results []*pb.OuterStruct) {
 			log.Fatalf("Failed to unmarshal Round1.\n")
 		}
 
-		var alphas, betas []big.Int
-
-		for j := 0; j < len(round1.Alphas); j++ {
-			alphas = append(alphas, *new(big.Int).SetBytes(round1.Alphas[j]))
-			betas = append(betas, *new(big.Int).SetBytes(round1.Betas[j]))
-		}
-
-		s.AlphasBetas[results[i].Clientid].alphas = alphas
-		s.AlphasBetas[results[i].Clientid].betas = betas
+		s.AlphasBetas[results[i].Clientid].alphas =
+			pb.ByteSliceToBigIntSlice(round1.Alphas)
+		s.AlphasBetas[results[i].Clientid].betas =
+			pb.ByteSliceToBigIntSlice(round1.Betas)
 	}
 }
 
-func computeRound1(FpState interface{}) proto.Message {
+func receiveRound2(FpState interface{}, results []*pb.OuterStruct) {
+	s := getFpState(FpState)
+
+	var round2 Round2
+
+	// Store all received alphas and betas
+	for i := 0; i < len(results); i++ {
+		if i == *id {
+			continue
+		}
+		err := proto.Unmarshal(results[i].Data, &round2)
+		if err != nil {
+			log.Fatalf("Failed to unmarshal Round2.\n")
+		}
+
+		s.GammasDeltasAfterExponentiation[results[i].Clientid].gammas =
+			pb.ByteSliceToBigIntSlice(round2.Gammas)
+		s.GammasDeltasAfterExponentiation[results[i].Clientid].deltas =
+			pb.ByteSliceToBigIntSlice(round2.Deltas)
+	}
+}
+
+func computePrologue(FpState interface{}) proto.Message {
 	s := getFpState(FpState)
 
 	// Generate private key
@@ -207,17 +270,16 @@ func computeRound1(FpState interface{}) proto.Message {
 
 	// Generate zkp of private key
 	t, r := zkp.DiscreteLogKnowledge(s.myPrivateKey, *zkp.G, *zkp.P, *zkp.Q)
-	// Create proto structure of zkp
-	zkpPrivKey := &pb.DiscreteLogKnowledge{T: t.Bytes(), R: r.Bytes()}
 
 	return &pb.Key{
 		Key:   s.myPublicKey.Bytes(),
-		Proof: zkpPrivKey,
+		Proof: pb.CreateDiscreteLogKnowledge(t, r),
 	}
 }
 
-func computeRound2(FpState interface{}) proto.Message {
+func computeRound1(FpState interface{}) proto.Message {
 	s := getFpState(FpState)
+	s.AlphasBetas = make([]*AlphaBetaStruct, len(s.keys))
 
 	var alphasInts, betasInts []big.Int
 	var proofs []*pb.EqualsOneOfTwo
@@ -255,16 +317,7 @@ func computeRound2(FpState interface{}) proto.Message {
 			zkp.EncryptedValueIsOneOfTwo(m, s.publicKey, rJ, *zkp.G,
 				*zkp.Y_Mill, *zkp.P, *zkp.Q)
 
-		proofs = append(proofs, &pb.EqualsOneOfTwo{
-			A_1: a_1.Bytes(),
-			A_2: a_2.Bytes(),
-			B_1: b_1.Bytes(),
-			B_2: b_2.Bytes(),
-			D_1: d_1.Bytes(),
-			D_2: d_2.Bytes(),
-			R_1: r_1.Bytes(),
-			R_2: r_2.Bytes(),
-		})
+		proofs = append(proofs, pb.CreateIsOneOfTwo(a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2))
 	}
 
 	s.AlphasBetas[*id].alphas = alphasInts
@@ -278,20 +331,69 @@ func computeRound2(FpState interface{}) proto.Message {
 
 	ts, r := zkp.DiscreteLogEquality(sumR, gs, *zkp.P, *zkp.Q)
 
-	var logEqualityProof pb.DiscreteLogEquality
-	for _, t := range ts {
-		logEqualityProof.Ts = append(logEqualityProof.Ts, t.Bytes())
+	// create the proto Round1 structure
+	return &Round1{
+		Proofs: proofs,
+		Proof:  pb.CreateDiscreteLogEquality(ts, r),
+		Alphas: pb.BigIntSliceToByteSlice(alphasInts),
+		Betas:  pb.BigIntSliceToByteSlice(betasInts),
 	}
-	logEqualityProof.R = r.Bytes()
+}
 
-	var round1Proof Round1
+func computeRound2(FpState interface{}) proto.Message {
+	s := getFpState(FpState)
+	n := len(s.keys)
+	s.GammasDeltasBeforeExponentiation = make([]*GammaDeltaStruct, n)
+	s.GammasDeltasAfterExponentiation = make([]*GammaDeltaStruct, n)
 
-	for j = 0; j < K; j++ {
-		round1Proof.Proofs = append(round1Proof.Proofs, proofs[j])
-		round1Proof.Alphas = append(round1Proof.Alphas, alphasInts[j].Bytes())
-		round1Proof.Betas = append(round1Proof.Betas, betasInts[j].Bytes())
+	var proofs []*pb.DiscreteLogEquality
+
+	for j := 0; j < int(K); j++ {
+		var mJ big.Int
+		mJ.Rand(zkp.RandGen, zkp.Q)
+
+		gammaJExponentiated, gammaJs :=
+			ComputeOutcome(*id, j, n, int(K), &mJ, zkp.P, func(x, y int) *big.Int {
+				return &s.AlphasBetas[x].alphas[y]
+			})
+
+		deltaJExponentiated, deltaJs :=
+			ComputeOutcome(*id, j, n, int(K), &mJ, zkp.P, func(x, y int) *big.Int {
+				return &s.AlphasBetas[x].betas[y]
+			})
+
+		// add all calculated values to state
+
+		// we have calculated the j-th unexponentiated value for all persons i
+		// so add the j-th value to each person i's unexponentiated struct
+		for i := 0; i < n; i++ {
+			s.GammasDeltasBeforeExponentiation[i].gammas =
+				append(s.GammasDeltasBeforeExponentiation[i].gammas, gammaJs[i])
+
+			s.GammasDeltasBeforeExponentiation[i].deltas =
+				append(s.GammasDeltasBeforeExponentiation[i].deltas, deltaJs[i])
+		}
+
+		// only have our calculated values for after exponentiation.
+		// will receive others' calculated values in the receiveRound2 function
+		s.GammasDeltasAfterExponentiation[*id].gammas =
+			append(s.GammasDeltasAfterExponentiation[*id].gammas, gammaJExponentiated)
+
+		s.GammasDeltasAfterExponentiation[*id].deltas =
+			append(s.GammasDeltasAfterExponentiation[*id].deltas, deltaJExponentiated)
+
+		// must prove that our exponentiated values have same exponent
+		gs := []big.Int{gammaJs[*id], deltaJs[*id]}
+
+		// now generate proof!
+		ts, r := zkp.DiscreteLogEquality(mJ, gs, *zkp.P, *zkp.Q)
+
+		proofs = append(proofs, pb.CreateDiscreteLogEquality(ts, r))
 	}
-	round1Proof.Proof = &logEqualityProof
 
-	return &round1Proof
+	return &Round2{
+		Proofs: proofs,
+		Gammas: pb.BigIntSliceToByteSlice(s.GammasDeltasAfterExponentiation[*id].gammas),
+		Deltas: pb.BigIntSliceToByteSlice(s.GammasDeltasAfterExponentiation[*id].deltas),
+	}
 }

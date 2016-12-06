@@ -3,6 +3,7 @@ package zkp
 import (
 	"crypto/sha256"
 	"fmt"
+	"log"
 	"math/big"
 )
 
@@ -70,6 +71,10 @@ func ComputeCMany(g []big.Int, Y []big.Int, t []big.Int, q big.Int) (c big.Int) 
 // returns the proof tuple (t[], r). The total size of the ZKP is k * log p +
 // log q bits.
 func DiscreteLogEquality(x big.Int, g []big.Int, p big.Int, q big.Int) ([]big.Int, big.Int) {
+	if len(g) == 0 {
+		log.Fatalf("Passed no bases to DiscreteLogEquality!\n")
+	}
+
 	var v, c, A, r big.Int
 
 	// Compute t
@@ -424,6 +429,14 @@ func CheckDiscreteLogKnowledgeProof(g big.Int, y big.Int, t big.Int, r big.Int, 
 
 // t, r are the ZKP
 func CheckDiscreteLogEqualityProof(G []big.Int, Y []big.Int, t []big.Int, r big.Int, p big.Int, q big.Int) (err error) {
+	if len(G) == 0 {
+		log.Fatalf("Passed no bases to CheckDiscreteLogEqualityProof!\n")
+	}
+
+	if len(Y) == 0 {
+		log.Fatalf("Passed no results to CheckDiscreteLogEqualityProof!\n")
+	}
+
 	// Verification
 	var tv, c, n big.Int
 
