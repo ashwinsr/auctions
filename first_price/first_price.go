@@ -35,9 +35,9 @@ type FpState struct {
 	publicKey    big.Int
 	currRound    int
 
-	AlphasBetas                      []*AlphaBetaStruct // TODO Akshay remember to initialize
-	GammasDeltasBeforeExponentiation []*GammaDeltaStruct
-	GammasDeltasAfterExponentiation  []*GammaDeltaStruct
+	AlphasBetas                      []*AlphaBetaStruct
+	GammasDeltasBeforeExponentiation []*GammaDeltaStruct // TODO wrong
+	GammasDeltasAfterExponentiation  []*GammaDeltaStruct // TODO wrong
 }
 
 func getID(hosts []string) int {
@@ -70,6 +70,7 @@ func main() {
 	rounds := []lib.Round{
 		{computePrologue, checkPrologue, receivePrologue},
 		{computeRound1, checkRound1, receiveRound1},
+		{computeRound2, checkRound2, receiveRound2},
 		// {computeRound3, checkRound3, receiveRound3},
 		// {computeRound4, checkRound4, receiveRound4},
 		// {computeRound5, checkRound5, receiveRound5},
@@ -130,7 +131,7 @@ func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
 	}
 
 	if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != K {
-		log.Fatalf("Incorrect number of shit")
+		log.Fatalf("Incorrect number of shit1")
 	}
 
 	alphas := pb.ByteSliceToBigIntSlice(in.Alphas)
@@ -161,7 +162,7 @@ func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 	}
 
 	if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != K {
-		log.Fatalf("Incorrect number of shit")
+		log.Fatalf("Incorrect number of shit2: %v %v %v %v", len(in.Gammas), len(in.Deltas), len(in.Proofs), K)
 	}
 
 	gammas := pb.ByteSliceToBigIntSlice(in.Gammas)
@@ -178,7 +179,7 @@ func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 		results := []big.Int{gammas[i], deltas[i]}
 
 		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
-			log.Fatalf("Received incorrect zero-knowledge proof for alpha/beta")
+			log.Fatalf("Received incorrect zero-knowledge proof for gamma/delta")
 		}
 	}
 
@@ -205,13 +206,8 @@ func receivePrologue(FpState interface{}, results []*pb.OuterStruct) {
 		s.keys = append(s.keys, k)
 	}
 
-	// Calculating final public key
-	// TODO SHOULD THIS BE MOD P? Probably doesn't matter, but just for computational practicality
-	s.publicKey.Set(zkp.One)
-	for _, key := range s.keys {
-		s.publicKey.Mul(&s.publicKey, &key)
-		s.publicKey.Mod(&s.publicKey, zkp.P)
-	}
+	// Calculating final public key by multiplying them all together
+	s.publicKey = Multiply(0, len(s.keys), zkp.P, func(i int) { return s[i] })
 
 	log.Printf("Calculated public key: %v\n", s.publicKey.String())
 }
@@ -231,9 +227,10 @@ func receiveRound1(FpState interface{}, results []*pb.OuterStruct) {
 			log.Fatalf("Failed to unmarshal Round1.\n")
 		}
 
-		s.AlphasBetas[results[i].Clientid].alphas =
+		s.AlphasBetas[i] = new(AlphaBetaStruct)
+		s.AlphasBetas[i].alphas =
 			pb.ByteSliceToBigIntSlice(round1.Alphas)
-		s.AlphasBetas[results[i].Clientid].betas =
+		s.AlphasBetas[i].betas =
 			pb.ByteSliceToBigIntSlice(round1.Betas)
 	}
 }
@@ -253,10 +250,13 @@ func receiveRound2(FpState interface{}, results []*pb.OuterStruct) {
 			log.Fatalf("Failed to unmarshal Round2.\n")
 		}
 
-		s.GammasDeltasAfterExponentiation[results[i].Clientid].gammas =
+		s.GammasDeltasAfterExponentiation[i] = new(GammaDeltaStruct)
+		s.GammasDeltasAfterExponentiation[i].gammas =
 			pb.ByteSliceToBigIntSlice(round2.Gammas)
-		s.GammasDeltasAfterExponentiation[results[i].Clientid].deltas =
+		s.GammasDeltasAfterExponentiation[i].deltas =
 			pb.ByteSliceToBigIntSlice(round2.Deltas)
+
+		log.Printf("[Round 2] Receiving ID %v: %v\n", i, s.GammasDeltasAfterExponentiation[i])
 	}
 }
 
@@ -280,6 +280,9 @@ func computePrologue(FpState interface{}) proto.Message {
 func computeRound1(FpState interface{}) proto.Message {
 	s := getFpState(FpState)
 	s.AlphasBetas = make([]*AlphaBetaStruct, len(s.keys))
+	s.AlphasBetas[*id] = new(AlphaBetaStruct)
+
+	log.Printf("Len: %v\n", len(s.keys))
 
 	var alphasInts, betasInts []big.Int
 	var proofs []*pb.EqualsOneOfTwo
@@ -320,14 +323,15 @@ func computeRound1(FpState interface{}) proto.Message {
 		proofs = append(proofs, pb.CreateIsOneOfTwo(a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2))
 	}
 
+	log.Printf("Id: %v\n", *id)
 	s.AlphasBetas[*id].alphas = alphasInts
 	s.AlphasBetas[*id].betas = betasInts
 
-	sumR.Mod(&sumR, zkp.Z) // TODO Akshay what is Z?
+	var pMinusOne big.Int
+	pMinusOne.Sub(zkp.P, zkp.One)
+	sumR.Mod(&sumR, &pMinusOne) // TODO I think. Fermat's little theorem
 
-	var gs []big.Int
-	gs = append(gs, s.publicKey)
-	gs = append(gs, *zkp.G)
+	gs := []big.Int{s.publicKey, *zkp.G}
 
 	ts, r := zkp.DiscreteLogEquality(sumR, gs, *zkp.P, *zkp.Q)
 
@@ -343,11 +347,19 @@ func computeRound1(FpState interface{}) proto.Message {
 func computeRound2(FpState interface{}) proto.Message {
 	s := getFpState(FpState)
 	n := len(s.keys)
+
+	// initialize GammaDeltaStruct's
 	s.GammasDeltasBeforeExponentiation = make([]*GammaDeltaStruct, n)
 	s.GammasDeltasAfterExponentiation = make([]*GammaDeltaStruct, n)
+	for i := 0; i < n; i++ {
+		s.GammasDeltasBeforeExponentiation[i] = new(GammaDeltaStruct)
+		s.GammasDeltasAfterExponentiation[i] = new(GammaDeltaStruct)
+	}
 
 	var proofs []*pb.DiscreteLogEquality
 
+	// TODO need to do this for EACH i, not just our own
+	// TODO most places where *id is used, it is wrong
 	for j := 0; j < int(K); j++ {
 		var mJ big.Int
 		mJ.Rand(zkp.RandGen, zkp.Q)
@@ -391,9 +403,19 @@ func computeRound2(FpState interface{}) proto.Message {
 		proofs = append(proofs, pb.CreateDiscreteLogEquality(ts, r))
 	}
 
+	log.Printf("[Round 2] Sending ID %v: %v\n", *id, s.GammasDeltasAfterExponentiation[*id])
+
 	return &Round2{
 		Proofs: proofs,
 		Gammas: pb.BigIntSliceToByteSlice(s.GammasDeltasAfterExponentiation[*id].gammas),
 		Deltas: pb.BigIntSliceToByteSlice(s.GammasDeltasAfterExponentiation[*id].deltas),
 	}
+}
+
+// TODO seller needs to know shit
+
+func computeRound3(FpState interface{}) proto.Message {
+	s := getFpState(FpState)
+	n := len(s.keys)
+
 }
