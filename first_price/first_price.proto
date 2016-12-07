@@ -13,8 +13,17 @@ message Round1 {
 }
 
 message Round2 {
-	repeated bytes gammas = 1;
-	repeated bytes deltas = 2;
+	repeated Gammas doubleGammas = 1;
+	repeated Deltas doubleDeltas = 2;
 
-	repeated common_pb.DiscreteLogEquality proofs = 3;
+	repeated DiscreteLogEqualityProofs doubleProofs = 3;
+}
+message Gammas {
+	repeated bytes gammas = 1;
+}
+message Deltas {
+	repeated bytes deltas = 1;
+}
+message DiscreteLogEqualityProofs {
+	repeated common_pb.DiscreteLogEquality proofs = 1;
 }

@@ -19,12 +19,11 @@ func Multiply(start, end int, p *big.Int, getter GetIntFunc) *big.Int {
 	return &result
 }
 
-// TODO make sure right indices
-// returns (result_(id))^m, [](result_(id))
-func ComputeOutcome(id, j, n, k int, m *big.Int, p *big.Int, getNum func(x, y int) *big.Int) (afterExp big.Int, beforeExp []big.Int) {
-	var cachedVal big.Int
+type GetNumFunc func(x, y int) *big.Int
+
+func Round2ComputeInitialValue(n, k, j int, p *big.Int, getNum GetNumFunc) (cachedVal big.Int) {
 	cachedVal.Set(zkp.One)
-	firstResult := Multiply(1, n, p, func(h int) *big.Int {
+	firstResult := Multiply(0, n, p, func(h int) *big.Int {
 		return Multiply(j+1, k, p, func(d int) *big.Int {
 			return getNum(h, d)
 		})
@@ -32,33 +31,28 @@ func ComputeOutcome(id, j, n, k int, m *big.Int, p *big.Int, getNum func(x, y in
 
 	cachedVal.Mul(&cachedVal, firstResult)
 	cachedVal.Mod(&cachedVal, p)
-
-	for i := 0; i < n; i++ {
-		var result big.Int
-		result.Set(&cachedVal)
-
-		secondResult := Multiply(1, j-1, p, func(d int) *big.Int {
-			return getNum(i, d)
-		})
-
-		result.Mul(&result, secondResult)
-		result.Mod(&result, p)
-
-		thirdResult := Multiply(1, i-1, p, func(h int) *big.Int {
-			return getNum(h, j)
-		})
-
-		result.Mul(&result, thirdResult)
-		result.Mod(&result, p)
-
-		// if this is our ID, we need to exponentiate as well!
-		if id == i {
-			afterExp.Set(&result)
-			afterExp.Exp(&result, m, p)
-		}
-
-		beforeExp = append(beforeExp, result)
-	}
-
 	return
+}
+
+// TODO make sure right indices
+// returns (result_(id))^m, [](result_(id))
+func Round2ComputeOutcome(i, j int, p, cachedVal *big.Int, getNum GetNumFunc) big.Int {
+	var result big.Int
+	result.Set(cachedVal)
+
+	secondResult := Multiply(0, j-1, p, func(d int) *big.Int {
+		return getNum(i, d)
+	})
+
+	result.Mul(&result, secondResult)
+	result.Mod(&result, p)
+
+	thirdResult := Multiply(0, i-1, p, func(h int) *big.Int {
+		return getNum(h, j)
+	})
+
+	result.Mul(&result, thirdResult)
+	result.Mod(&result, p)
+
+	return result
 }

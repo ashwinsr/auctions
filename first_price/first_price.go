@@ -36,8 +36,8 @@ type FpState struct {
 	currRound    int
 
 	AlphasBetas                      []*AlphaBetaStruct
-	GammasDeltasBeforeExponentiation []*GammaDeltaStruct // TODO wrong
-	GammasDeltasAfterExponentiation  []*GammaDeltaStruct // TODO wrong
+	GammasDeltasBeforeExponentiation []*GammaDeltaStruct   // indices (a, i, j)
+	GammasDeltasAfterExponentiation  [][]*GammaDeltaStruct // indices (a, i, j)
 }
 
 func getID(hosts []string) int {
@@ -161,25 +161,44 @@ func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 		log.Fatalf("Failed to unmarshal Round2.\n")
 	}
 
-	if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != K {
-		log.Fatalf("Incorrect number of shit2: %v %v %v %v", len(in.Gammas), len(in.Deltas), len(in.Proofs), K)
+	// TODO need error checking
+
+	// if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != K {
+	// 	log.Fatalf("Incorrect number of shit2: %v %v %v %v", len(in.Gammas), len(in.Deltas), len(in.Proofs), K)
+	// }
+
+	if len(in.DoubleGammas) != len(in.DoubleDeltas) ||
+		len(in.DoubleDeltas) != len(in.DoubleProofs) ||
+		len(in.DoubleGammas) != len(s.keys) {
+		log.Fatalf("Incorrect number of outer shit")
 	}
 
-	gammas := pb.ByteSliceToBigIntSlice(in.Gammas)
-	deltas := pb.ByteSliceToBigIntSlice(in.Deltas)
-
-	for i := 0; i < len(in.Gammas); i++ {
-		ts, r := pb.DestructDiscreteLogEquality(in.Proofs[i])
-
-		// bases are their gammas and deltas before exponentiation!
-		bases := []big.Int{
-			s.GammasDeltasBeforeExponentiation[result.Clientid].gammas[i],
-			s.GammasDeltasBeforeExponentiation[result.Clientid].deltas[i],
+	for i := 0; i < len(in.DoubleGammas); i++ {
+		if len(in.DoubleGammas[i].Gammas) != len(in.DoubleDeltas[i].Deltas) ||
+			len(in.DoubleDeltas[i].Deltas) != len(in.DoubleProofs[i].Proofs) ||
+			len(in.DoubleGammas[i].Gammas) != int(K) {
+			log.Fatalf("Incorrect number of inner shit %v %v %v\n",
+				len(in.DoubleGammas[i].Gammas),
+				len(in.DoubleDeltas[i].Deltas),
+				len(in.DoubleProofs[i].Proofs))
 		}
-		results := []big.Int{gammas[i], deltas[i]}
 
-		if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
-			log.Fatalf("Received incorrect zero-knowledge proof for gamma/delta")
+		gammas := pb.ByteSliceToBigIntSlice(in.DoubleGammas[i].Gammas)
+		deltas := pb.ByteSliceToBigIntSlice(in.DoubleDeltas[i].Deltas)
+
+		for j := 0; j < len(in.DoubleGammas[i].Gammas); j++ {
+			ts, r := pb.DestructDiscreteLogEquality(in.DoubleProofs[i].Proofs[j])
+
+			// bases are their gammas and deltas before exponentiation!
+			bases := []big.Int{
+				s.GammasDeltasBeforeExponentiation[result.Clientid].gammas[j],
+				s.GammasDeltasBeforeExponentiation[result.Clientid].deltas[j],
+			}
+			results := []big.Int{gammas[j], deltas[j]}
+
+			if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+				log.Fatalf("Received incorrect zero-knowledge proof for gamma/delta")
+			}
 		}
 	}
 
@@ -207,7 +226,7 @@ func receivePrologue(FpState interface{}, results []*pb.OuterStruct) {
 	}
 
 	// Calculating final public key by multiplying them all together
-	s.publicKey = Multiply(0, len(s.keys), zkp.P, func(i int) { return s[i] })
+	s.publicKey = *Multiply(0, len(s.keys), zkp.P, func(i int) *big.Int { return &s.keys[i] })
 
 	log.Printf("Calculated public key: %v\n", s.publicKey.String())
 }
@@ -241,22 +260,26 @@ func receiveRound2(FpState interface{}, results []*pb.OuterStruct) {
 	var round2 Round2
 
 	// Store all received alphas and betas
-	for i := 0; i < len(results); i++ {
-		if i == *id {
+	for a := 0; a < len(results); a++ {
+		if a == *id {
 			continue
 		}
-		err := proto.Unmarshal(results[i].Data, &round2)
+		err := proto.Unmarshal(results[a].Data, &round2)
 		if err != nil {
 			log.Fatalf("Failed to unmarshal Round2.\n")
 		}
 
-		s.GammasDeltasAfterExponentiation[i] = new(GammaDeltaStruct)
-		s.GammasDeltasAfterExponentiation[i].gammas =
-			pb.ByteSliceToBigIntSlice(round2.Gammas)
-		s.GammasDeltasAfterExponentiation[i].deltas =
-			pb.ByteSliceToBigIntSlice(round2.Deltas)
+		s.GammasDeltasAfterExponentiation[a] = make([]*GammaDeltaStruct, len(s.keys))
 
-		log.Printf("[Round 2] Receiving ID %v: %v\n", i, s.GammasDeltasAfterExponentiation[i])
+		for i := 0; i < len(s.keys); i++ { // len(s.keys) == len(results)
+			s.GammasDeltasAfterExponentiation[a][i] = new(GammaDeltaStruct)
+			s.GammasDeltasAfterExponentiation[a][i].gammas =
+				pb.ByteSliceToBigIntSlice(round2.DoubleGammas[i].Gammas)
+			s.GammasDeltasAfterExponentiation[a][i].deltas =
+				pb.ByteSliceToBigIntSlice(round2.DoubleDeltas[i].Deltas)
+		}
+
+		log.Printf("[Round 2] Receiving ID %v: %v\n", a, s.GammasDeltasAfterExponentiation[a])
 	}
 }
 
@@ -348,74 +371,98 @@ func computeRound2(FpState interface{}) proto.Message {
 	s := getFpState(FpState)
 	n := len(s.keys)
 
-	// initialize GammaDeltaStruct's
+	proofs := make([]*DiscreteLogEqualityProofs, n)
+	gammas := make([]*Gammas, n)
+	deltas := make([]*Deltas, n)
+
 	s.GammasDeltasBeforeExponentiation = make([]*GammaDeltaStruct, n)
-	s.GammasDeltasAfterExponentiation = make([]*GammaDeltaStruct, n)
-	for i := 0; i < n; i++ {
-		s.GammasDeltasBeforeExponentiation[i] = new(GammaDeltaStruct)
-		s.GammasDeltasAfterExponentiation[i] = new(GammaDeltaStruct)
+	s.GammasDeltasAfterExponentiation = make([][]*GammaDeltaStruct, n)
+	s.GammasDeltasAfterExponentiation[*id] = make([]*GammaDeltaStruct, n)
+
+	getNumAlphas := func(x, y int) *big.Int {
+		return &s.AlphasBetas[x].alphas[y]
+	}
+	getNumBetas := func(x, y int) *big.Int {
+		return &s.AlphasBetas[x].betas[y]
 	}
 
-	var proofs []*pb.DiscreteLogEquality
+	// calculate all gammas and deltas before exponentiation
+	// these are the same for everyone!
+	// then calculate exponentiated values, one for each i and j.
+	// Every person will send as i*j different exponentiated gammas
+	// and i*j different exponentiated deltas!!!
+	for j := 0; j < int(K); j++ {
+		cachedValGammas := Round2ComputeInitialValue(n, int(K), j, zkp.P, getNumAlphas)
+		cachedValDeltas := Round2ComputeInitialValue(n, int(K), j, zkp.P, getNumBetas)
+		for i := 0; i < n; i++ {
+			// initialize if necessary
+			if j == 0 {
+				s.GammasDeltasBeforeExponentiation[i] = new(GammaDeltaStruct)
+				s.GammasDeltasAfterExponentiation[*id][i] = new(GammaDeltaStruct)
+				proofs[i] = new(DiscreteLogEqualityProofs)
+				gammas[i] = new(Gammas)
+				deltas[i] = new(Deltas)
+			}
+
+			// compute unexponentiated gammas/deltas
+			gamma := Round2ComputeOutcome(i, j, zkp.P, &cachedValGammas, getNumAlphas)
+			delta := Round2ComputeOutcome(i, j, zkp.P, &cachedValDeltas, getNumBetas)
+
+			s.GammasDeltasBeforeExponentiation[i].gammas =
+				append(s.GammasDeltasBeforeExponentiation[i].gammas, gamma)
+			s.GammasDeltasBeforeExponentiation[i].deltas =
+				append(s.GammasDeltasBeforeExponentiation[i].deltas, delta)
+
+			// now exponentiate to find the value we will publish to all!
+			var mIJ big.Int
+			mIJ.Rand(zkp.RandGen, zkp.Q)
+
+			var gammaExp, deltaExp big.Int
+			gammaExp.Exp(&gamma, &mIJ, zkp.P)
+			deltaExp.Exp(&delta, &mIJ, zkp.P)
+
+			// add exponentiated value to our exponentiated Gammas/Deltas struct
+			s.GammasDeltasAfterExponentiation[*id][i].gammas =
+				append(s.GammasDeltasAfterExponentiation[*id][i].gammas, gammaExp)
+			s.GammasDeltasAfterExponentiation[*id][i].deltas =
+				append(s.GammasDeltasAfterExponentiation[*id][i].deltas, deltaExp)
+
+			// must prove that our exponentiated values have same exponent
+			gs := []big.Int{gamma, delta}
+
+			// now generate proof!
+			ts, r := zkp.DiscreteLogEquality(mIJ, gs, *zkp.P, *zkp.Q)
+
+			// and add to the list of proofs!
+			proofs[i].Proofs = append(proofs[i].Proofs, pb.CreateDiscreteLogEquality(ts, r))
+			// add the number manually
+			gammas[i].Gammas = append(gammas[i].Gammas, gammaExp.Bytes())
+			deltas[i].Deltas = append(deltas[i].Deltas, deltaExp.Bytes())
+		}
+
+		log.Printf("Going to send gammas/deltas: %v\n%v",
+			s.GammasDeltasBeforeExponentiation[*id].gammas,
+			s.GammasDeltasBeforeExponentiation[*id].deltas)
+	}
 
 	// TODO need to do this for EACH i, not just our own
 	// TODO most places where *id is used, it is wrong
-	for j := 0; j < int(K); j++ {
-		var mJ big.Int
-		mJ.Rand(zkp.RandGen, zkp.Q)
-
-		gammaJExponentiated, gammaJs :=
-			ComputeOutcome(*id, j, n, int(K), &mJ, zkp.P, func(x, y int) *big.Int {
-				return &s.AlphasBetas[x].alphas[y]
-			})
-
-		deltaJExponentiated, deltaJs :=
-			ComputeOutcome(*id, j, n, int(K), &mJ, zkp.P, func(x, y int) *big.Int {
-				return &s.AlphasBetas[x].betas[y]
-			})
-
-		// add all calculated values to state
-
-		// we have calculated the j-th unexponentiated value for all persons i
-		// so add the j-th value to each person i's unexponentiated struct
-		for i := 0; i < n; i++ {
-			s.GammasDeltasBeforeExponentiation[i].gammas =
-				append(s.GammasDeltasBeforeExponentiation[i].gammas, gammaJs[i])
-
-			s.GammasDeltasBeforeExponentiation[i].deltas =
-				append(s.GammasDeltasBeforeExponentiation[i].deltas, deltaJs[i])
-		}
-
-		// only have our calculated values for after exponentiation.
-		// will receive others' calculated values in the receiveRound2 function
-		s.GammasDeltasAfterExponentiation[*id].gammas =
-			append(s.GammasDeltasAfterExponentiation[*id].gammas, gammaJExponentiated)
-
-		s.GammasDeltasAfterExponentiation[*id].deltas =
-			append(s.GammasDeltasAfterExponentiation[*id].deltas, deltaJExponentiated)
-
-		// must prove that our exponentiated values have same exponent
-		gs := []big.Int{gammaJs[*id], deltaJs[*id]}
-
-		// now generate proof!
-		ts, r := zkp.DiscreteLogEquality(mJ, gs, *zkp.P, *zkp.Q)
-
-		proofs = append(proofs, pb.CreateDiscreteLogEquality(ts, r))
-	}
 
 	log.Printf("[Round 2] Sending ID %v: %v\n", *id, s.GammasDeltasAfterExponentiation[*id])
 
+	// TODO no....
 	return &Round2{
-		Proofs: proofs,
-		Gammas: pb.BigIntSliceToByteSlice(s.GammasDeltasAfterExponentiation[*id].gammas),
-		Deltas: pb.BigIntSliceToByteSlice(s.GammasDeltasAfterExponentiation[*id].deltas),
+		DoubleProofs: proofs,
+		DoubleGammas: gammas,
+		DoubleDeltas: deltas,
 	}
 }
 
 // TODO seller needs to know shit
 
 func computeRound3(FpState interface{}) proto.Message {
-	s := getFpState(FpState)
-	n := len(s.keys)
+	// s := getFpState(FpState)
+	// n := len(s.keys)
 
+	return nil
 }
