@@ -18,7 +18,7 @@ var (
 	bid       = flag.Uint("bid", 0, "Amount of money")
 )
 
-var K uint = 2
+var K uint = 8
 
 type AlphaBetaStruct struct {
 	alphas, betas []big.Int
@@ -491,8 +491,10 @@ func computeRound2(FpState interface{}) proto.Message {
 			}
 
 			// compute unexponentiated gammas/deltas
+			log.Printf("[Round 2] %v-th inner loop\n", i)
 			gamma := Round2ComputeOutcome(i, j, zkp.P, &cachedValGamma, getNumAlphas)
 			delta := Round2ComputeOutcome(i, j, zkp.P, &cachedValDelta, getNumBetas)
+			log.Printf("Finished computing non-cached value\n")
 
 			s.GammasDeltasBeforeExponentiation[i].gammas =
 				append(s.GammasDeltasBeforeExponentiation[i].gammas, gamma)
@@ -533,9 +535,6 @@ func computeRound2(FpState interface{}) proto.Message {
 		// 	s.GammasDeltasBeforeExponentiation[*id].gammas,
 		// 	s.GammasDeltasBeforeExponentiation[*id].deltas)
 	}
-
-	// TODO need to do this for EACH i, not just our own
-	// TODO most places where *id is used, it is wrong
 
 	log.Printf("[Round 2] Sending ID %v: %v\n", *id, s.GammasDeltasAfterExponentiation[*id])
 
