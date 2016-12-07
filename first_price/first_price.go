@@ -400,7 +400,7 @@ func computeRound1(FpState interface{}) proto.Message {
 	sumR.Set(zkp.Zero)
 	var j uint
 	for j = 0; j < K; j++ {
-		var alphaJ, betaJ, rJ big.Int
+		var alphaJ, betaJ, rJ, m big.Int
 
 		rJ.Rand(zkp.RandGen, zkp.Q)
 		sumR.Add(&sumR, &rJ)
@@ -408,8 +408,11 @@ func computeRound1(FpState interface{}) proto.Message {
 		alphaJ.Exp(&s.publicKey, &rJ, zkp.P) // TODO mod P?
 
 		if j == *bid {
+			m.Set(zkp.Y_Mill)
 			alphaJ.Mul(&alphaJ, zkp.Y_Mill)
 			alphaJ.Mod(&alphaJ, zkp.P)
+		} else {
+			m.Set(zkp.One)
 		}
 
 		// calculate beta_j
@@ -417,14 +420,6 @@ func computeRound1(FpState interface{}) proto.Message {
 
 		alphasInts = append(alphasInts, alphaJ)
 		betasInts = append(betasInts, betaJ)
-
-		var m big.Int
-
-		if j == *bid {
-			m.Set(zkp.Y_Mill)
-		} else {
-			m.Set(zkp.One)
-		}
 
 		a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 :=
 			zkp.EncryptedValueIsOneOfTwo(m, s.publicKey, rJ, *zkp.G,
@@ -467,9 +462,11 @@ func computeRound2(FpState interface{}) proto.Message {
 	s.GammasDeltasAfterExponentiation[*id] = make([]*GammaDeltaStruct, n)
 
 	getNumAlphas := func(x, y int) *big.Int {
+		log.Printf("[Round 2] AlphasBetas[%v].alphas[%v] = %v\n", x, y, s.AlphasBetas[x].alphas[y])
 		return &s.AlphasBetas[x].alphas[y]
 	}
 	getNumBetas := func(x, y int) *big.Int {
+		log.Printf("[Round 2] AlphasBetas[%v].betas[%v] = %v\n", x, y, s.AlphasBetas[x].betas[y])
 		return &s.AlphasBetas[x].betas[y]
 	}
 
@@ -479,8 +476,10 @@ func computeRound2(FpState interface{}) proto.Message {
 	// Every person will send as i*j different exponentiated gammas
 	// and i*j different exponentiated deltas!!!
 	for j := 0; j < int(K); j++ {
-		cachedValGammas := Round2ComputeInitialValue(n, int(K), j, zkp.P, getNumAlphas)
-		cachedValDeltas := Round2ComputeInitialValue(n, int(K), j, zkp.P, getNumBetas)
+		log.Printf("[Round 2] %v-th outer loop\n", j)
+		cachedValGamma := Round2ComputeInitialValue(n, int(K), j, zkp.P, getNumAlphas)
+		cachedValDelta := Round2ComputeInitialValue(n, int(K), j, zkp.P, getNumBetas)
+		log.Printf("[Round 2] Cached val gamma: %v, Cached val delta: %v", cachedValGamma, cachedValDelta)
 		for i := 0; i < n; i++ {
 			// initialize if necessary
 			if j == 0 {
@@ -492,8 +491,8 @@ func computeRound2(FpState interface{}) proto.Message {
 			}
 
 			// compute unexponentiated gammas/deltas
-			gamma := Round2ComputeOutcome(i, j, zkp.P, &cachedValGammas, getNumAlphas)
-			delta := Round2ComputeOutcome(i, j, zkp.P, &cachedValDeltas, getNumBetas)
+			gamma := Round2ComputeOutcome(i, j, zkp.P, &cachedValGamma, getNumAlphas)
+			delta := Round2ComputeOutcome(i, j, zkp.P, &cachedValDelta, getNumBetas)
 
 			s.GammasDeltasBeforeExponentiation[i].gammas =
 				append(s.GammasDeltasBeforeExponentiation[i].gammas, gamma)
@@ -614,6 +613,8 @@ func epilogue(s *FpState) {
 			denominator := Multiply(0, n, zkp.P, func(i int) *big.Int {
 				return &s.PhisAfterExponentiation[i][a][j]
 			})
+
+			log.Printf("Numerator: %v, Denominator: %v", numerator, denominator)
 
 			denominator.ModInverse(denominator, zkp.P)
 
