@@ -18,7 +18,7 @@ var (
 	bid       = flag.Uint("bid", 0, "Amount of money")
 )
 
-var K uint = 27
+var K uint = 2
 
 type AlphaBetaStruct struct {
 	alphas, betas []big.Int
@@ -188,6 +188,7 @@ func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 
 		for j := 0; j < len(in.DoubleGammas[i].Gammas); j++ {
 			ts, r := pb.DestructDiscreteLogEquality(in.DoubleProofs[i].Proofs[j])
+			log.Printf("Received gamma/delta %v/%v with proof values %v, %v", gammas[j], deltas[j], ts, r)
 
 			// bases are their gammas and deltas before exponentiation!
 			bases := []big.Int{
@@ -438,11 +439,13 @@ func computeRound2(FpState interface{}) proto.Message {
 			// add the number manually
 			gammas[i].Gammas = append(gammas[i].Gammas, gammaExp.Bytes())
 			deltas[i].Deltas = append(deltas[i].Deltas, deltaExp.Bytes())
+
+			log.Printf("Created gammaExp/deltaExp %v/%v with proof values %v, %v", gammaExp, deltaExp, ts, r)
 		}
 
-		log.Printf("Going to send gammas/deltas: %v\n%v",
-			s.GammasDeltasBeforeExponentiation[*id].gammas,
-			s.GammasDeltasBeforeExponentiation[*id].deltas)
+		// log.Printf("Going to send gammas/deltas: %v\n%v",
+		// 	s.GammasDeltasBeforeExponentiation[*id].gammas,
+		// 	s.GammasDeltasBeforeExponentiation[*id].deltas)
 	}
 
 	// TODO need to do this for EACH i, not just our own
