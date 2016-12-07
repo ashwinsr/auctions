@@ -27,3 +27,12 @@ message Deltas {
 message DiscreteLogEqualityProofs {
 	repeated common_pb.DiscreteLogEquality proofs = 1;
 }
+
+message Round3 {
+	repeated Phis doublePhis = 1;
+
+	repeated DiscreteLogEqualityProofs doubleProofs = 2;
+}
+message Phis {
+	repeated bytes phis = 1;
+}

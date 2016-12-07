@@ -18,7 +18,7 @@ var (
 	bid       = flag.Uint("bid", 0, "Amount of money")
 )
 
-var K uint = 2
+var K uint = 3
 
 type AlphaBetaStruct struct {
 	alphas, betas []big.Int
@@ -35,9 +35,13 @@ type FpState struct {
 	publicKey    big.Int
 	currRound    int
 
-	AlphasBetas                      []*AlphaBetaStruct
-	GammasDeltasBeforeExponentiation []*GammaDeltaStruct   // indices (a, i, j)
+	AlphasBetas []*AlphaBetaStruct
+
+	GammasDeltasBeforeExponentiation []*GammaDeltaStruct   // indices (i, j)
 	GammasDeltasAfterExponentiation  [][]*GammaDeltaStruct // indices (a, i, j)
+
+	PhisBeforeExponentiation [][]big.Int   // indices (i, j)
+	PhisAfterExponentiation  [][][]big.Int // indices (a, i, j)
 }
 
 func getID(hosts []string) int {
@@ -71,7 +75,7 @@ func main() {
 		{computePrologue, checkPrologue, receivePrologue},
 		{computeRound1, checkRound1, receiveRound1},
 		{computeRound2, checkRound2, receiveRound2},
-		// {computeRound3, checkRound3, receiveRound3},
+		{computeRound3, checkRound3, receiveRound3},
 		// {computeRound4, checkRound4, receiveRound4},
 		// {computeRound5, checkRound5, receiveRound5},
 		// {computeRound6, checkRound6, receiveRound6},
@@ -188,17 +192,69 @@ func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 
 		for j := 0; j < len(in.DoubleGammas[i].Gammas); j++ {
 			ts, r := pb.DestructDiscreteLogEquality(in.DoubleProofs[i].Proofs[j])
-			log.Printf("Received gamma/delta %v/%v with proof values %v, %v", gammas[j], deltas[j], ts, r)
 
 			// bases are their gammas and deltas before exponentiation!
 			bases := []big.Int{
-				s.GammasDeltasBeforeExponentiation[result.Clientid].gammas[j],
-				s.GammasDeltasBeforeExponentiation[result.Clientid].deltas[j],
+				s.GammasDeltasBeforeExponentiation[i].gammas[j],
+				s.GammasDeltasBeforeExponentiation[i].deltas[j],
 			}
 			results := []big.Int{gammas[j], deltas[j]}
+			log.Printf("Received gamma/delta %v/%v with proof values %v, %v, and bases %v",
+				gammas[j], deltas[j], ts, r, bases)
 
 			if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
 				log.Fatalf("Received incorrect zero-knowledge proof for gamma/delta")
+			}
+		}
+	}
+
+	return
+}
+
+func checkRound3(state interface{}, result *pb.OuterStruct) (err error) {
+	s := getFpState(state)
+	var in Round3
+
+	err = proto.Unmarshal(result.Data, &in)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal Round2.\n")
+	}
+
+	// TODO need error checking
+
+	// if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != K {
+	// 	log.Fatalf("Incorrect number of shit2: %v %v %v %v", len(in.Gammas), len(in.Deltas), len(in.Proofs), K)
+	// }
+
+	if len(in.DoublePhis) != len(in.DoubleProofs) ||
+		len(in.DoubleProofs) != len(s.keys) {
+		log.Fatalf("Incorrect number of outer shit2")
+	}
+
+	for i := 0; i < len(in.DoublePhis); i++ {
+		if len(in.DoublePhis[i].Phis) != len(in.DoubleProofs[i].Proofs) ||
+			len(in.DoubleProofs[i].Proofs) != int(K) {
+			log.Fatalf("Incorrect number of inner shit2 %v %v\n",
+				len(in.DoublePhis[i].Phis),
+				len(in.DoubleProofs[i].Proofs))
+		}
+
+		phis := pb.ByteSliceToBigIntSlice(in.DoublePhis[i].Phis)
+
+		for j := 0; j < len(in.DoublePhis[i].Phis); j++ {
+			ts, r := pb.DestructDiscreteLogEquality(in.DoubleProofs[i].Proofs[j])
+
+			// bases are their gammas and deltas before exponentiation!
+			bases := []big.Int{
+				s.PhisBeforeExponentiation[i][j],
+				*zkp.G,
+			}
+			results := []big.Int{phis[j], s.keys[result.Clientid]}
+			log.Printf("Received phi %v with proof values %v, %v, and bases %v",
+				phis[j], ts, r, bases)
+
+			if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+				log.Fatalf("Received incorrect zero-knowledge proof for phis")
 			}
 		}
 	}
@@ -211,7 +267,9 @@ func receivePrologue(FpState interface{}, results []*pb.OuterStruct) {
 	s := getFpState(FpState)
 	var key pb.Key
 
-	s.keys = append(s.keys, s.myPublicKey)
+	s.keys = make([]big.Int, len(results))
+
+	s.keys[*id] = s.myPublicKey
 
 	for i := 0; i < len(results); i++ {
 		if i == *id {
@@ -223,7 +281,7 @@ func receivePrologue(FpState interface{}, results []*pb.OuterStruct) {
 		}
 		var k big.Int
 		k.SetBytes(key.Key)
-		s.keys = append(s.keys, k)
+		s.keys[i] = k
 	}
 
 	// Calculating final public key by multiplying them all together
@@ -282,6 +340,34 @@ func receiveRound2(FpState interface{}, results []*pb.OuterStruct) {
 
 		log.Printf("[Round 2] Receiving ID %v: %v\n", a, s.GammasDeltasAfterExponentiation[a])
 	}
+}
+
+func receiveRound3(FpState interface{}, results []*pb.OuterStruct) {
+	s := getFpState(FpState)
+
+	var round3 Round3
+
+	// Store all received alphas and betas
+	for a := 0; a < len(results); a++ {
+		if a == *id {
+			continue
+		}
+		err := proto.Unmarshal(results[a].Data, &round3)
+		if err != nil {
+			log.Fatalf("Failed to unmarshal Round3.\n")
+		}
+
+		s.PhisAfterExponentiation[a] = make([][]big.Int, len(s.keys))
+
+		for i := 0; i < len(s.keys); i++ { // len(s.keys) == len(results)
+			s.PhisAfterExponentiation[a][i] =
+				pb.ByteSliceToBigIntSlice(round3.DoublePhis[i].Phis)
+		}
+
+		log.Printf("[Round 3] Receiving ID %v: %v\n", a, s.PhisAfterExponentiation[a])
+	}
+
+	epilogue(s)
 }
 
 func computePrologue(FpState interface{}) proto.Message {
@@ -440,7 +526,8 @@ func computeRound2(FpState interface{}) proto.Message {
 			gammas[i].Gammas = append(gammas[i].Gammas, gammaExp.Bytes())
 			deltas[i].Deltas = append(deltas[i].Deltas, deltaExp.Bytes())
 
-			log.Printf("Created gammaExp/deltaExp %v/%v with proof values %v, %v", gammaExp, deltaExp, ts, r)
+			log.Printf("Created gammaExp/deltaExp %v/%v with proof values %v, %v, and bases %v",
+				gammaExp, deltaExp, ts, r, gs)
 		}
 
 		// log.Printf("Going to send gammas/deltas: %v\n%v",
@@ -462,10 +549,83 @@ func computeRound2(FpState interface{}) proto.Message {
 }
 
 // TODO seller needs to know shit
-
+// TODO all must send to the seller first, who relays these all out!!!!!!!!
 func computeRound3(FpState interface{}) proto.Message {
-	// s := getFpState(FpState)
-	// n := len(s.keys)
+	s := getFpState(FpState)
+	n := len(s.keys)
 
-	return nil
+	var doublePhis []*Phis
+	var proofs []*DiscreteLogEqualityProofs
+
+	s.PhisAfterExponentiation = make([][][]big.Int, n)
+
+	for i := 0; i < n; i++ {
+		s.PhisBeforeExponentiation =
+			append(s.PhisBeforeExponentiation, nil)
+		s.PhisAfterExponentiation[*id] =
+			append(s.PhisAfterExponentiation[*id], nil)
+
+		proofs = append(proofs, &DiscreteLogEqualityProofs{})
+
+		for j := 0; j < int(K); j++ {
+			phi := Multiply(0, n, zkp.P, func(h int) *big.Int {
+				return &s.GammasDeltasAfterExponentiation[h][i].deltas[j]
+			})
+
+			var phiExp big.Int
+			phiExp.Exp(phi, &s.myPrivateKey, zkp.P)
+
+			s.PhisBeforeExponentiation[i] =
+				append(s.PhisBeforeExponentiation[i], *phi)
+
+			s.PhisAfterExponentiation[*id][i] =
+				append(s.PhisAfterExponentiation[*id][i], phiExp)
+
+			// must prove that our exponentiated phi has same exponent as our public key portion
+			gs := []big.Int{*phi, *zkp.G}
+
+			// now generate proof!
+			ts, r := zkp.DiscreteLogEquality(s.myPrivateKey, gs, *zkp.P, *zkp.Q)
+
+			proofs[i].Proofs = append(proofs[i].Proofs, pb.CreateDiscreteLogEquality(ts, r))
+		}
+
+		log.Printf("Hullo: %v %v\n", i, len(s.PhisAfterExponentiation[*id][i]))
+
+		doublePhis = append(doublePhis, &Phis{
+			Phis: pb.BigIntSliceToByteSlice(s.PhisAfterExponentiation[*id][i]),
+		})
+	}
+
+	return &Round3{
+		DoublePhis:   doublePhis,
+		DoubleProofs: proofs,
+	}
+}
+
+func epilogue(s *FpState) {
+	n := len(s.keys)
+	for a := 0; a < n; a++ {
+		for j := 0; j < int(K); j++ {
+			numerator := Multiply(0, n, zkp.P, func(i int) *big.Int {
+				return &s.GammasDeltasAfterExponentiation[i][a].gammas[j]
+			})
+
+			denominator := Multiply(0, n, zkp.P, func(i int) *big.Int {
+				return &s.PhisAfterExponentiation[i][a][j]
+			})
+
+			denominator.ModInverse(denominator, zkp.P)
+
+			var vAJ big.Int
+			vAJ.Mul(numerator, denominator)
+			vAJ.Mod(&vAJ, zkp.P)
+
+			if vAJ.Cmp(zkp.One) == 0 {
+				log.Printf("ID %v won at selling price %v", a, j)
+			}
+		}
+	}
+
+	log.Fatalf("Done")
 }
