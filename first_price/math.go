@@ -40,19 +40,21 @@ func Round2ComputeOutcome(i, j int, p, cachedVal *big.Int, getNum GetNumFunc) bi
 	var result big.Int
 	result.Set(cachedVal)
 
-	secondResult := Multiply(0, j-1, p, func(d int) *big.Int {
+	// upper limit is j and this multiply function is NON-INCLUSIVE
+	secondResult := Multiply(0, j, p, func(d int) *big.Int {
 		return getNum(i, d)
 	})
 
 	result.Mul(&result, secondResult)
 	result.Mod(&result, p)
 
-	thirdResult := Multiply(0, i-1, p, func(h int) *big.Int {
-		return getNum(h, j)
-	})
+	// TODO this part is for TIEBREAKING
+	// thirdResult := Multiply(0, i, p, func(h int) *big.Int {
+	// 	return getNum(h, j)
+	// })
 
-	result.Mul(&result, thirdResult)
-	result.Mod(&result, p)
+	// result.Mul(&result, thirdResult)
+	// result.Mod(&result, p)
 
 	return result
 }
