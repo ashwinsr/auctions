@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"crypto/tls"
 	"crypto/x509"
 
 	"google.golang.org/grpc"
@@ -155,30 +156,42 @@ func getRootCertificate() []byte {
 }
 
 func getClientCertificate() credentials.TransportCredentials {
+	// Create CA cert pool
 	caCert := getRootCertificate()
+	caPool := x509.NewCertPool()
+	caPool.AppendCertsFromPEM(caCert)
 
 	certFileName := fmt.Sprintf("../certs/%v.cert", id)
-	clientCert, err := ioutil.ReadFile(certFileName)
+	keyFileName := fmt.Sprintf("../certs/%v.key", id)
+	myCert, err := tls.LoadX509KeyPair(certFileName, keyFileName)
 	if err != nil {
 		log.Fatalf("Could not load client TLS certificate: %v", err)
 	}
 
-	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM(caCert)
-	pool.AppendCertsFromPEM(clientCert)
-
-	return credentials.NewClientTLSFromCert(pool, "")
+	return credentials.NewTLS(&tls.Config{
+		Certificates: []tls.Certificate{myCert},
+		RootCAs:      caPool,
+	})
 }
 
 func getServerCertificate() credentials.TransportCredentials {
+	// Create CA cert pool
+	caCert := getRootCertificate()
+	caPool := x509.NewCertPool()
+	caPool.AppendCertsFromPEM(caCert)
+
 	certFile := fmt.Sprintf("../certs/%v.cert", id)
 	keyFile := fmt.Sprintf("../certs/%v.key", id)
-	cert, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+	myCert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		log.Fatalf("Could not load server TLS certificate: %v", err)
 	}
 
-	return cert
+	return credentials.NewTLS(&tls.Config{
+		Certificates: []tls.Certificate{myCert},
+		ClientCAs:    caPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+	})
 }
 
 func InitClients(hosts []string, myAddr string) {

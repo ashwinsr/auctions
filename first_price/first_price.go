@@ -18,7 +18,7 @@ var (
 	bid       = flag.Uint("bid", 0, "Amount of money")
 )
 
-var K uint = 8
+var K uint = 100
 
 type AlphaBetaStruct struct {
 	alphas, betas []big.Int
