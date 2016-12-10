@@ -4,14 +4,15 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"sync"
 	"time"
-    "io/ioutil"
 
-    "crypto/x509"
+	"crypto/x509"
+
 	"google.golang.org/grpc"
 
 	pb "github.com/ashwinsr/auctions/common_pb"
@@ -53,8 +54,11 @@ var (
 	clients []lib_pb.ZKPAuctionClient
 	// Publish
 	// isReady      chan struct{}
-	receivedIdChan chan int32 = make(chan int32)
-	isReady        chan bool  = make(chan bool, 1)
+	receivedIdChan chan int32    = make(chan int32)
+	isReady        chan struct{} = make(chan struct{}, 1)
+
+	readyToReceiveNextRound *sync.Cond
+	numRoundLock            sync.Mutex
 )
 
 // TODO millionaire specific
@@ -78,12 +82,26 @@ func (s *server) Publish(ctx context.Context, in *pb.OuterStruct) (*google_proto
 		})
 		// fmt.Println("After wedding")
 
-		fmt.Println(in.Clientid)
+		// log.Println("Received Client id: ", in.Clientid, "\n")
+		numRoundLock.Lock()
+
+		for {
+			// log.Printf("For looping client id %v\n", in.Clientid)
+			if in.Stepid == numRound {
+				break
+			}
+			readyToReceiveNextRound.Wait()
+			// log.Printf("Got through (client id %v)\n", in.Clientid)
+		}
 
 		// TODO THIS IS FUCKING STUPID BUT OK FOR NOW
 		dataLock.Lock()
 		data[in.Clientid] = in
 		dataLock.Unlock()
+		log.Printf("RECEIVED DATA FOR ROUND ***************************** %v, Client id: %v", in.Stepid, in.Clientid)
+
+		// unlock numRoundLock
+		numRoundLock.Unlock()
 
 		receivedIdChan <- in.Clientid
 	}()
@@ -128,28 +146,28 @@ func GetHosts() []string {
 }
 
 func getRootCertificate() []byte {
-    cert, err := ioutil.ReadFile("../certs/ca.cert")
-    if err != nil {
-        log.Fatalf("Could not load root CA certificate.")
-    }
+	cert, err := ioutil.ReadFile("../certs/ca.cert")
+	if err != nil {
+		log.Fatalf("Could not load root CA certificate.")
+	}
 
-    return cert
+	return cert
 }
 
 func getClientCertificate() credentials.TransportCredentials {
-    caCert := getRootCertificate()
+	caCert := getRootCertificate()
 
-    certFileName := fmt.Sprintf("../certs/%v.cert", id)
-    clientCert, err := ioutil.ReadFile(certFileName)
-    if err != nil {
-        log.Fatalf("Could not load client TLS certificate: %v", err)
-    }
+	certFileName := fmt.Sprintf("../certs/%v.cert", id)
+	clientCert, err := ioutil.ReadFile(certFileName)
+	if err != nil {
+		log.Fatalf("Could not load client TLS certificate: %v", err)
+	}
 
-    pool := x509.NewCertPool()
-    pool.AppendCertsFromPEM(caCert)
-    pool.AppendCertsFromPEM(clientCert)
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(caCert)
+	pool.AppendCertsFromPEM(clientCert)
 
-    return credentials.NewClientTLSFromCert(pool, "")
+	return credentials.NewClientTLSFromCert(pool, "")
 }
 
 func getServerCertificate() credentials.TransportCredentials {
@@ -195,8 +213,11 @@ func InitClients(hosts []string, myAddr string) {
 
 	data = make([]*pb.OuterStruct, len(clients)+1)
 	fmt.Println(len(data))
+
+	readyToReceiveNextRound = sync.NewCond(&numRoundLock)
+
 	// log.Println("Finishing initializing clients")
-	isReady <- true
+	isReady <- struct{}{}
 }
 
 type Round struct {
@@ -243,6 +264,9 @@ func checkAll(state interface{}, check CheckFn) {
 		dataLock.Lock()
 		result := data[idx]
 		dataLock.Unlock()
+
+		log.Printf("Checking client id %v", idx)
+
 		go func() {
 			defer wg.Done()
 			err := check(state, result)
@@ -258,7 +282,7 @@ func checkAll(state interface{}, check CheckFn) {
 func Register(rounds []Round, state interface{}) {
 	for _, round := range rounds {
 		result := round.Compute(state)
-		numRound++
+
 		var mData []byte
 		if result == nil {
 			mData = []byte{}
@@ -267,11 +291,25 @@ func Register(rounds []Round, state interface{}) {
 		}
 		out := &pb.OuterStruct{
 			Clientid: int32(id),
-			Stepid:   numRound,
+			Stepid:   numRound + 1,
 			Data:     mData,
 		}
+
+		// log.Printf("Finished marshalling...")
+
+		// Now that we've computed and marshalled
+		// tell everyone we can receive stuff from the next round
+		numRoundLock.Lock()
+		numRound++
+		readyToReceiveNextRound.Broadcast()
+		numRoundLock.Unlock()
+
+		// log.Printf("Publishing...")
 		publishAll(out)
+
+		// log.Printf("Checking...")
 		checkAll(state, round.Check)
+		// log.Printf("Receiving...")
 		round.Receive(state, data)
 	}
 }
