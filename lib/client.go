@@ -147,6 +147,7 @@ func getClientCertificate() credentials.TransportCredentials {
 	keyFileName := fmt.Sprintf("../certs/%v.key", id)
 	myCert, err := tls.LoadX509KeyPair(certFileName, keyFileName)
     if err != nil {
+    	fmt.Println("Cant get certificate for", id)
         log.Fatalf("Could not load client TLS certificate: %v", err)
     }
 
@@ -186,7 +187,9 @@ func InitClients(hosts []string, myAddr string) {
 		}
 
 		// Get certificate
+		// fmt.Println("Getting Certificate for", i)
 		cert := getClientCertificate()
+		// fmt.Println("Got Certificate", i)
 
 		// Configure options to Dial
 		var opts []grpc.DialOption

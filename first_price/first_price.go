@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"sync"
 
 	pb "github.com/ashwinsr/auctions/common_pb"
 	"github.com/ashwinsr/auctions/lib"
@@ -34,6 +35,8 @@ type FpState struct {
 	keys         []big.Int
 	publicKey    big.Int
 	currRound    int
+
+	sharedLock     sync.Mutex
 
 	AlphasBetas []*AlphaBetaStruct
 
@@ -126,9 +129,11 @@ func checkPrologue(state interface{}, result *pb.OuterStruct) (err error) {
 }
 
 func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
+	
 	s := getFpState(state)
 	var in Round1
 
+	s.sharedLock.Lock()
 	err = proto.Unmarshal(result.Data, &in)
 	if err != nil {
 		log.Fatalf("Failed to unmarshal Round1.\n")
@@ -152,14 +157,17 @@ func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
 	}
 
 	// TODO Akshay remember to check the other proof here, in.proof
-
+	s.sharedLock.Unlock()
 	return
 }
 
 func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
+	
 	s := getFpState(state)
 	var in Round2
-
+	
+	s.sharedLock.Lock()
+	
 	err = proto.Unmarshal(result.Data, &in)
 	if err != nil {
 		log.Fatalf("Failed to unmarshal Round2.\n")
@@ -207,13 +215,16 @@ func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 			}
 		}
 	}
-
+	s.sharedLock.Unlock()
 	return
 }
 
 func checkRound3(state interface{}, result *pb.OuterStruct) (err error) {
+	
 	s := getFpState(state)
 	var in Round3
+
+	s.sharedLock.Lock()
 
 	err = proto.Unmarshal(result.Data, &in)
 	if err != nil {
@@ -258,15 +269,17 @@ func checkRound3(state interface{}, result *pb.OuterStruct) (err error) {
 			}
 		}
 	}
-
+	s.sharedLock.Unlock()
 	return
 }
 
 // TODO decompose! Can be used in both millionaires and auction
 func receivePrologue(FpState interface{}, results []*pb.OuterStruct) {
+	
 	s := getFpState(FpState)
 	var key pb.Key
 
+	s.sharedLock.Lock()
 	s.keys = make([]big.Int, len(results))
 
 	s.keys[*id] = s.myPublicKey
@@ -288,13 +301,14 @@ func receivePrologue(FpState interface{}, results []*pb.OuterStruct) {
 	s.publicKey = *Multiply(0, len(s.keys), zkp.P, func(i int) *big.Int { return &s.keys[i] })
 
 	log.Printf("Calculated public key: %v\n", s.publicKey.String())
+	s.sharedLock.Unlock()
 }
 
 func receiveRound1(FpState interface{}, results []*pb.OuterStruct) {
 	s := getFpState(FpState)
 
 	var round1 Round1
-
+	s.sharedLock.Lock()
 	// Store all received alphas and betas
 	for i := 0; i < len(results); i++ {
 		if i == *id {
@@ -311,13 +325,14 @@ func receiveRound1(FpState interface{}, results []*pb.OuterStruct) {
 		s.AlphasBetas[i].betas =
 			pb.ByteSliceToBigIntSlice(round1.Betas)
 	}
+	s.sharedLock.Unlock()
 }
 
 func receiveRound2(FpState interface{}, results []*pb.OuterStruct) {
 	s := getFpState(FpState)
 
 	var round2 Round2
-
+	s.sharedLock.Lock()
 	// Store all received alphas and betas
 	for a := 0; a < len(results); a++ {
 		if a == *id {
@@ -340,13 +355,14 @@ func receiveRound2(FpState interface{}, results []*pb.OuterStruct) {
 
 		log.Printf("[Round 2] Receiving ID %v: %v\n", a, s.GammasDeltasAfterExponentiation[a])
 	}
+	s.sharedLock.Unlock()
 }
 
 func receiveRound3(FpState interface{}, results []*pb.OuterStruct) {
 	s := getFpState(FpState)
 
 	var round3 Round3
-
+	s.sharedLock.Lock()
 	// Store all received alphas and betas
 	for a := 0; a < len(results); a++ {
 		if a == *id {
@@ -368,6 +384,7 @@ func receiveRound3(FpState interface{}, results []*pb.OuterStruct) {
 	}
 
 	epilogue(s)
+	s.sharedLock.Unlock()
 }
 
 func computePrologue(FpState interface{}) proto.Message {
@@ -552,6 +569,8 @@ func computeRound3(FpState interface{}) proto.Message {
 	s := getFpState(FpState)
 	n := len(s.keys)
 
+	s.sharedLock.Lock()
+
 	var doublePhis []*Phis
 	var proofs []*DiscreteLogEqualityProofs
 
@@ -595,6 +614,8 @@ func computeRound3(FpState interface{}) proto.Message {
 		})
 	}
 
+	s.sharedLock.Unlock()
+	
 	return &Round3{
 		DoublePhis:   doublePhis,
 		DoubleProofs: proofs,
@@ -613,7 +634,7 @@ func epilogue(s *FpState) {
 				return &s.PhisAfterExponentiation[i][a][j]
 			})
 
-			log.Printf("Numerator: %v, Denominator: %v", numerator, denominator)
+			// log.Printf("Numerator: %v, Denominator: %v", numerator, denominator)
 
 			denominator.ModInverse(denominator, zkp.P)
 
