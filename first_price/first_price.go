@@ -18,7 +18,7 @@ var (
 	bid       = flag.Uint("bid", 0, "Amount of money")
 )
 
-var K uint = 100
+var K uint = 10
 
 type AlphaBetaStruct struct {
 	alphas, betas []big.Int
@@ -151,7 +151,28 @@ func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
 		}
 	}
 
-	// TODO Akshay remember to check the other proof here, in.proof
+	// This checks if the bidder bid exactly one value:
+	// Only one of the alphas should have Y as a factor, and therefore
+	// dividing their product by Y gives us y^(sum of the r's).
+	// Then multiplying all of the betas together gives us g^(sum of the r's).
+	// Therefore we check that these two have the same exponent!
+
+	yExpSumR := *Multiply(0, len(alphas), zkp.P, func(i int) *big.Int { return &alphas[i] })
+	gExpSumR := *Multiply(0, len(betas), zkp.P, func(i int) *big.Int { return &betas[i] })
+
+	// divide by Y
+	YInv := new(big.Int).ModInverse(zkp.Y_Mill, zkp.P)
+	yExpSumR.Mul(&yExpSumR, YInv)
+	yExpSumR.Mod(&yExpSumR, zkp.P)
+
+	bases := []big.Int{s.publicKey, *zkp.G}
+	results := []big.Int{yExpSumR, gExpSumR}
+
+	ts, r := pb.DestructDiscreteLogEquality(in.Proof)
+
+	if err := zkp.CheckDiscreteLogEqualityProof(bases, results, ts, r, *zkp.P, *zkp.Q); err != nil {
+		log.Fatalf("Received incorrect zero-knowledge proof for alphas/betas: bidder bid multiple values?")
+	}
 
 	return
 }
