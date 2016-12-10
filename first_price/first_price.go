@@ -389,7 +389,7 @@ func receiveRound3(FpState interface{}, results []*pb.OuterStruct) {
 
 func computePrologue(FpState interface{}) proto.Message {
 	s := getFpState(FpState)
-
+	s.sharedLock.Lock()
 	// Generate private key
 	s.myPrivateKey.Rand(zkp.RandGen, zkp.Q)
 	// Calculate public key
@@ -398,14 +398,18 @@ func computePrologue(FpState interface{}) proto.Message {
 	// Generate zkp of private key
 	t, r := zkp.DiscreteLogKnowledge(s.myPrivateKey, *zkp.G, *zkp.P, *zkp.Q)
 
+	s.sharedLock.Unlock()
 	return &pb.Key{
 		Key:   s.myPublicKey.Bytes(),
 		Proof: pb.CreateDiscreteLogKnowledge(t, r),
 	}
+
 }
 
 func computeRound1(FpState interface{}) proto.Message {
 	s := getFpState(FpState)
+
+	s.sharedLock.Lock()
 	s.AlphasBetas = make([]*AlphaBetaStruct, len(s.keys))
 	s.AlphasBetas[*id] = new(AlphaBetaStruct)
 
@@ -457,6 +461,7 @@ func computeRound1(FpState interface{}) proto.Message {
 
 	ts, r := zkp.DiscreteLogEquality(sumR, gs, *zkp.P, *zkp.Q)
 
+	s.sharedLock.Unlock()
 	// create the proto Round1 structure
 	return &Round1{
 		Proofs: proofs,
@@ -468,6 +473,9 @@ func computeRound1(FpState interface{}) proto.Message {
 
 func computeRound2(FpState interface{}) proto.Message {
 	s := getFpState(FpState)
+	
+	s.sharedLock.Lock()
+
 	n := len(s.keys)
 
 	proofs := make([]*DiscreteLogEqualityProofs, n)
@@ -555,6 +563,7 @@ func computeRound2(FpState interface{}) proto.Message {
 
 	log.Printf("[Round 2] Sending ID %v: %v\n", *id, s.GammasDeltasAfterExponentiation[*id])
 
+	s.sharedLock.Unlock()
 	// TODO no....
 	return &Round2{
 		DoubleProofs: proofs,
