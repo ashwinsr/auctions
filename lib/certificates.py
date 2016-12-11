@@ -68,6 +68,7 @@ subjectAltName = @alt_names
 [ alt_names ]
 DNS.1 = %(domain)s
 DNS.2 = *.%(domain)s
+IP.1 = %(domain)s
 """
 
 MYDIR = './'

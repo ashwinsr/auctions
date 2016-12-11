@@ -65,7 +65,8 @@ func main() {
 	myAddr := hosts[*id]
 	lib.Init(*id)
 
-	fmt.Println(myAddr)
+	fmt.Println("My address is: ", myAddr)
+	fmt.Println("My ID is: ", *id)
 
 	go lib.RunServer(myAddr)
 
