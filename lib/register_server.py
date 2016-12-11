@@ -46,7 +46,6 @@ class Auction:
         if myAddress is None: return None
 
         auction = {}
-        auction["myAddress"] = myAddress
         auction["myID"]      = myID
         auction["seller"]    = self.buyers[0]
         auction["hosts"]     = self.buyers
