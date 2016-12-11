@@ -8,14 +8,14 @@
 
 from flask import Flask, request, Response
 import certificates
+import json
 app = Flask(__name__)
 
 ##### BEGIN AUCTION CLASS #####
 
 class Auction:
-    def __init__(self, seller_ip):
+    def __init__(self):
         self.next_port = 9000
-        self.seller = seller_ip + ":" + self.get_next_port()
         self.buyers = []
 
     def get_next_port(self):
@@ -31,7 +31,27 @@ class Auction:
         
         # Add them to the list of buyers
         self.buyers.append(buyer_ip + ":" + self.get_next_port())
+
         return certs, buyer_id
+
+    def get_address_and_id(self, ip):
+        for id, host in enumerate(self.buyers):
+            if host.split(':')[0] == ip:
+                return host, id
+
+        return None, None
+
+    def get_auc_file(self, ip):
+        myAddress, myID = self.get_address_and_id(ip)
+        if myAddress is None: return None
+
+        auction = {}
+        auction["myAddress"] = myAddress
+        auction["myID"]      = myID
+        auction["seller"]    = self.buyers[0]
+        auction["hosts"]     = self.buyers
+
+        return auction
 
 ##### END AUCTION CLASS #####
 
@@ -47,8 +67,8 @@ def create_auction():
     global auction
     request_ip = get_request_IP(request)
 
-    # Create a new auction and set the seller
-    auction = Auction(request_ip)
+    # Create a new auction
+    auction = Auction()
     return "You have successfully created a new auction!\n"
 
 @app.route('/register')
@@ -70,8 +90,12 @@ def download_auction_file():
         return "No open auction exists\n"
     request_ip = get_request_IP(request)
 
-    # Create auction file for this person
-    # List of hosts, my host, my ID, seller
-    return "You are downloading the auction file!\n"
+    # Create and return an auc file for this person
+    auc_file = auction.get_auc_file(request_ip)
+    if auc_file is None:
+        return "You are not registered for this auction!\n"
+
+    auc_json = json.dumps(auc_file)
+    return Response(auc_json, mimetype="text/plain", headers={"Content-Disposition": "attachment;filename=hosts.auc"})
 
 ##### END SERVER CODE #####
