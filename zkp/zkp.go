@@ -202,7 +202,13 @@ func EncryptedValueIsOneOfTwo(m big.Int, y big.Int, r big.Int, g big.Int, z big.
 	return a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2
 }
 
-func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.Int, p big.Int, q big.Int, pi Permutation, R []big.Int) (c []big.Int, cd big.Int, cD big.Int, ER Ciphertext, f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int, yD big.Int, zD big.Int, Z big.Int) {
+func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext,
+	y big.Int, g big.Int, p big.Int, q big.Int,
+	pi Permutation, R []big.Int) (
+	c []big.Int, cd big.Int, cD big.Int, ER Ciphertext,
+	f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int,
+	yD big.Int, zD big.Int, Z big.Int) {
+
 	var rd, rD, sd, sD, delta, RR big.Int
 	var n int
 	n = len(e)
@@ -535,7 +541,11 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	return
 }
 
-func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, p big.Int, q big.Int, g big.Int, y big.Int, c []big.Int, cd big.Int, cD big.Int, ER Ciphertext, f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int, yD big.Int, zD big.Int, Z big.Int) (err error) {
+func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext,
+	p big.Int, q big.Int, g big.Int, y big.Int,
+	c []big.Int, cd big.Int, cD big.Int, ER Ciphertext,
+	f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int,
+	yD big.Int, zD big.Int, Z big.Int) (err error) {
 
 	h := sha256.New()
 	n := len(e)
