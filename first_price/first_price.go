@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"math/big"
 
@@ -62,26 +61,35 @@ func main() {
 	hosts := lib.GetHosts()
 	*id = getID(hosts)
 
+
 	myAddr := hosts[*id]
 	lib.Init(*id)
-
-	fmt.Println(myAddr)
 
 	go lib.RunServer(myAddr)
 
 	lib.InitClients(hosts, myAddr)
 
-	rounds := []lib.Round{
-		{computePrologue, checkPrologue, receivePrologue},
-		{computeRound1, checkRound1, receiveRound1},
-		{computeRound2, checkRound2, receiveRound2},
-		{computeRound3, checkRound3, receiveRound3},
-		// {computeRound4, checkRound4, receiveRound4},
-		// {computeRound5, checkRound5, receiveRound5},
-		// {computeRound6, checkRound6, receiveRound6},
+	var rounds []lib.Round
+	// If seller
+	if *id == 0 {
+		rounds = []lib.Round{
+			{computePrologue, checkPrologue, receivePrologue},
+			{computeRound1, checkRound1, receiveRound1},
+			{computeRound2, checkRound2, receiveRound2},
+			{computeRound3, checkRound3, sellerReceiveRound3},
+		}	
+	} else {
+		// If bidder
+		rounds = []lib.Round{
+			{computePrologue, checkPrologue, receivePrologue},
+			{computeRound1, checkRound1, receiveRound1},
+			{computeRound2, checkRound2, receiveRound2},
+			{computeRound3, checkRound3, receiveRound3},
+		}		
 	}
-
+	
 	lib.Register(rounds, myState)
+
 }
 
 func getFpState(state interface{}) (s *FpState) {
@@ -369,6 +377,39 @@ func receiveRound3(FpState interface{}, results []*pb.OuterStruct) {
 	var round3 Round3
 
 	// Store all received alphas and betas
+	log.Printf("results round 3", len(results))
+	for a := 0; a < len(results); a++ {
+		if a == *id {
+			continue
+		}
+
+		log.Printf("Received Clientid", results[a].Clientid)
+		
+		err := proto.Unmarshal(results[a].Data, &round3)
+		if err != nil {
+			log.Fatalf("Failed to unmarshal Round3.\n", results[a])
+		}
+
+		s.PhisAfterExponentiation[a] = make([][]big.Int, len(s.keys))
+
+		for i := 0; i < len(s.keys); i++ { // len(s.keys) == len(results)
+			s.PhisAfterExponentiation[a][i] =
+				pb.ByteSliceToBigIntSlice(round3.DoublePhis[i].Phis)
+		}
+
+		log.Printf("[Round 3] Receiving ID %v: %v\n", a, s.PhisAfterExponentiation[a])
+	}
+
+
+	epilogue(s)
+}
+
+func sellerReceiveRound3(FpState interface{}, results []*pb.OuterStruct) {
+	s := getFpState(FpState)
+
+	var round3 Round3
+
+	// Store all received alphas and betas
 	for a := 0; a < len(results); a++ {
 		if a == *id {
 			continue
@@ -386,12 +427,27 @@ func receiveRound3(FpState interface{}, results []*pb.OuterStruct) {
 		}
 
 		log.Printf("[Round 3] Receiving ID %v: %v\n", a, s.PhisAfterExponentiation[a])
+		log.Printf("Publishing Clientid", results[a].Clientid)
+		log.Printf("Publishing Stepid", results[a].Stepid)
+		log.Printf("Round 3", results[a].Data)
+		
+		lib.PublishAll(results[a])
 	}
+
+	// myRound3 = Round3{
+	// 	DoublePhis:   doublePhis,
+	// 	DoubleProofs: proofs,
+
+	// out := &pb.OuterStruct{
+	// 	Clientid: int32(id),
+	// 	Stepid:   numRound + 1,
+	// 	Data:     marshalData(&myRound3),
+	// }
 
 	epilogue(s)
 }
 
-func computePrologue(FpState interface{}) proto.Message {
+func computePrologue(FpState interface{}) (proto.Message, bool) {
 	s := getFpState(FpState)
 
 	// Generate private key
@@ -405,10 +461,10 @@ func computePrologue(FpState interface{}) proto.Message {
 	return &pb.Key{
 		Key:   s.myPublicKey.Bytes(),
 		Proof: pb.CreateDiscreteLogKnowledge(t, r),
-	}
+	}, false
 }
 
-func computeRound1(FpState interface{}) proto.Message {
+func computeRound1(FpState interface{}) (proto.Message, bool) {
 	s := getFpState(FpState)
 	s.AlphasBetas = make([]*AlphaBetaStruct, len(s.keys))
 	s.AlphasBetas[*id] = new(AlphaBetaStruct)
@@ -467,10 +523,10 @@ func computeRound1(FpState interface{}) proto.Message {
 		Proof:  pb.CreateDiscreteLogEquality(ts, r),
 		Alphas: pb.BigIntSliceToByteSlice(alphasInts),
 		Betas:  pb.BigIntSliceToByteSlice(betasInts),
-	}
+	}, false
 }
 
-func computeRound2(FpState interface{}) proto.Message {
+func computeRound2(FpState interface{}) (proto.Message, bool) {
 	s := getFpState(FpState)
 	n := len(s.keys)
 
@@ -564,12 +620,10 @@ func computeRound2(FpState interface{}) proto.Message {
 		DoubleProofs: proofs,
 		DoubleGammas: gammas,
 		DoubleDeltas: deltas,
-	}
+	}, false
 }
 
-// TODO seller needs to know shit
-// TODO all must send to the seller first, who relays these all out!!!!!!!!
-func computeRound3(FpState interface{}) proto.Message {
+func computeRound3(FpState interface{}) (proto.Message, bool) {
 	s := getFpState(FpState)
 	n := len(s.keys)
 
@@ -619,7 +673,7 @@ func computeRound3(FpState interface{}) proto.Message {
 	return &Round3{
 		DoublePhis:   doublePhis,
 		DoubleProofs: proofs,
-	}
+	}, true
 }
 
 func epilogue(s *FpState) {
