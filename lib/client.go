@@ -100,7 +100,6 @@ func (s *server) Publish(ctx context.Context, in *pb.OuterStruct) (*google_proto
 		dataLock.Unlock()
 		log.Printf("RECEIVED DATA FOR ROUND ***************************** %v, Client id: %v", in.Stepid, in.Clientid)
 
-		// unlock numRoundLock
 		numRoundLock.Unlock()
 
 		receivedIdChan <- in.Clientid

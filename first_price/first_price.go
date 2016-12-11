@@ -70,8 +70,9 @@ func main() {
 	lib.InitClients(hosts, myAddr)
 
 	var rounds []lib.Round
-	// If seller
+	
 	if *id == 0 {
+		// If seller
 		rounds = []lib.Round{
 			{computePrologue, checkPrologue, receivePrologue},
 			{computeRound1, checkRound1, receiveRound1},
@@ -400,7 +401,6 @@ func receiveRound3(FpState interface{}, results []*pb.OuterStruct) {
 		log.Printf("[Round 3] Receiving ID %v: %v\n", a, s.PhisAfterExponentiation[a])
 	}
 
-
 	epilogue(s)
 }
 
@@ -430,7 +430,7 @@ func sellerReceiveRound3(FpState interface{}, results []*pb.OuterStruct) {
 		log.Printf("Publishing Clientid", results[a].Clientid)
 		log.Printf("Publishing Stepid", results[a].Stepid)
 		log.Printf("Round 3", results[a].Data)
-		
+
 		lib.PublishAll(results[a])
 	}
 
