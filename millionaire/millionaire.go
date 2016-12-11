@@ -276,29 +276,180 @@ func computeRound3(state interface{}) proto.Message {
 	s.myGammasDeltas = gds
 	s.theirGammasDeltas = gds
 
+	if *id == 0 {
+		// if our ID is 0 we verifiably secret shuffle
+		e := zkp.AlphasBetasToCipherTexts(s.myGammasDeltas.Gammas, s.myGammasDeltas.Deltas)
+		E, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z :=
+			zkp.RandomlyPermute(e, *zkp.P, *zkp.Q, *zkp.G, s.publicKey)
+		permutedGammas, permutedDeltas := zkp.CipherTextsToAlphasBetas(E)
+		s.myGammasDeltas.Gammas = permutedGammas
+		s.myGammasDeltas.Deltas = permutedDeltas
+		return &MixedOutput{
+			Gammas: pb.BigIntSliceToByteSlice(permutedGammas),
+			Deltas: pb.BigIntSliceToByteSlice(permutedDeltas),
+			Proof:  pb.CreateVerifiableSecretShuffle(c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z),
+		}
+	}
+
 	return nil
 }
 
 func checkRound3(state interface{}, result *pb.OuterStruct) (err error) {
-	return nil
+	log.Printf("About to check for round %v", result.Stepid)
+	// if we are ID 0, we should not receive anything in this round.
+	if *id == 0 {
+		return nil
+	}
+	// otherwise, we have received shuffled gammas/deltas
+	s := getState(state)
+	var in MixedOutput
+
+	err = proto.Unmarshal(result.Data, &in)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal MixedOutput.\n")
+	}
+
+	fmt.Println(len(in.Gammas))
+	fmt.Println(len(in.Deltas))
+
+	if len(in.Gammas) != len(in.Deltas) {
+		log.Fatalf("Incorrect number of gammas/deltas received from id %v", result.Clientid)
+	}
+
+	gammas := pb.ByteSliceToBigIntSlice(in.Gammas)
+	deltas := pb.ByteSliceToBigIntSlice(in.Deltas)
+
+	e := zkp.AlphasBetasToCipherTexts(s.myGammasDeltas.Gammas, s.myGammasDeltas.Deltas)
+	E := zkp.AlphasBetasToCipherTexts(gammas, deltas)
+
+	c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z :=
+		pb.DestructVerifiableSecretShuffle(in.Proof)
+
+	log.Printf("Continuing checking a: %v!", result.Stepid)
+	err = zkp.CheckVerifiableSecretShuffle(e, E, *zkp.P, *zkp.Q, *zkp.G, s.publicKey,
+		c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
+
+	log.Printf("Continuing checking b: %v!", result.Stepid)
+	if err != nil {
+		log.Fatalf("Received incorrect zero knowledge proof for permuted output 1")
+	}
+
+	log.Printf("Checked for round %v!", result.Stepid)
+	return err
 }
 
 func receiveRound3(state interface{}, results []*pb.OuterStruct) {
-	return
+	log.Printf("About to receive for round %v", results[1-*id].Stepid)
+	if *id == 0 {
+		return // nothing to actually receive here for ID 0, do not try to demartial
+	}
+	s := getState(state)
+	var mixedOutput MixedOutput
+
+	// Wait for alphas and betas of other client
+	for i := 0; i < len(results); i++ {
+		if i == *id {
+			continue
+		}
+		err := proto.Unmarshal(results[i].Data, &mixedOutput)
+		if err != nil {
+			log.Fatalf("Failed to unmarshal MixedOutput.\n")
+		}
+		s.theirGammasDeltas.Gammas = pb.ByteSliceToBigIntSlice(mixedOutput.Gammas)
+		s.theirGammasDeltas.Deltas = pb.ByteSliceToBigIntSlice(mixedOutput.Deltas)
+	}
 }
 
 // ROUND 4 FUNCTIONS
 
 func computeRound4(state interface{}) proto.Message {
-	return nil
+	if *id == 0 {
+		return nil // nothing to actually send here for ID 0
+	}
+
+	s := getState(state)
+	// TODO
+	// if our ID is 1 we verifiably secret shuffle what we received from ID 0 last round
+	e := zkp.AlphasBetasToCipherTexts(s.theirGammasDeltas.Gammas, s.theirGammasDeltas.Deltas)
+	E, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z :=
+		zkp.RandomlyPermute(e, *zkp.P, *zkp.Q, *zkp.G, s.publicKey)
+	permutedGammas, permutedDeltas := zkp.CipherTextsToAlphasBetas(E)
+	s.myGammasDeltas.Gammas = permutedGammas
+	s.myGammasDeltas.Deltas = permutedDeltas
+	s.theirGammasDeltas.Gammas = permutedGammas
+	s.theirGammasDeltas.Deltas = permutedDeltas
+	return &MixedOutput{
+		Gammas: pb.BigIntSliceToByteSlice(permutedGammas),
+		Deltas: pb.BigIntSliceToByteSlice(permutedDeltas),
+		Proof:  pb.CreateVerifiableSecretShuffle(c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z),
+	}
 }
 
 func checkRound4(state interface{}, result *pb.OuterStruct) (err error) {
-	return nil
+	log.Printf("About to check for round %v", result.Stepid)
+	// if we are ID 1, we should not receive anything real in this round.
+	if *id == 1 {
+		return nil
+	}
+	// otherwise, we have received shuffled gammas/deltas
+	s := getState(state)
+	var in MixedOutput
+
+	err = proto.Unmarshal(result.Data, &in)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal MixedOutput.\n")
+	}
+
+	fmt.Println(len(in.Gammas))
+	fmt.Println(len(in.Deltas))
+
+	if len(in.Gammas) != len(in.Deltas) {
+		log.Fatalf("Incorrect number of gammas/deltas received from id %v", result.Clientid)
+	}
+
+	gammas := pb.ByteSliceToBigIntSlice(in.Gammas)
+	deltas := pb.ByteSliceToBigIntSlice(in.Deltas)
+
+	e := zkp.AlphasBetasToCipherTexts(s.myGammasDeltas.Gammas, s.myGammasDeltas.Deltas)
+	E := zkp.AlphasBetasToCipherTexts(gammas, deltas)
+
+	c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z :=
+		pb.DestructVerifiableSecretShuffle(in.Proof)
+
+	err = zkp.CheckVerifiableSecretShuffle(e, E, *zkp.P, *zkp.Q, *zkp.G, s.publicKey,
+		c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
+
+	if err != nil {
+		log.Fatalf("Received incorrect zero knowledge proof for permuted output 2")
+	}
+
+	return err
 }
 
 func receiveRound4(state interface{}, results []*pb.OuterStruct) {
-	return
+	log.Printf("About to receive for round %v", results[1-*id].Stepid)
+	// if we are ID 1, we should not receive anything real in this round.
+	if *id == 1 {
+		return
+	}
+
+	s := getState(state)
+	var mixedOutput MixedOutput
+
+	// Wait for alphas and betas of other client
+	for i := 0; i < len(results); i++ {
+		if i == *id {
+			continue
+		}
+		err := proto.Unmarshal(results[i].Data, &mixedOutput)
+		if err != nil {
+			log.Fatalf("Failed to unmarshal MixedOutput.\n")
+		}
+		s.theirGammasDeltas.Gammas = pb.ByteSliceToBigIntSlice(mixedOutput.Gammas)
+		s.theirGammasDeltas.Deltas = pb.ByteSliceToBigIntSlice(mixedOutput.Deltas)
+		s.myGammasDeltas.Gammas = s.theirGammasDeltas.Gammas
+		s.myGammasDeltas.Deltas = s.theirGammasDeltas.Deltas
+	}
 }
 
 // ROUND 5 FUNCTIONS
