@@ -258,6 +258,7 @@ func PublishAll(out *pb.OuterStruct) {
 		client := client
 		go func() {
 			// Needs to be a goroutine because otherwise we block waiting for a response
+			log.Printf("ID:%v Publishing to clientid:%v for Round:%v", id, out.Clientid, out.Stepid)
 			_, err := client.Publish(context.Background(), out)
 			if err != nil {
 				log.Fatalf("Error on sending data: %v", err)
@@ -271,8 +272,24 @@ func checkAll(state interface{}, check CheckFn) {
 	var wg sync.WaitGroup
 	wg.Add(len(clients))
 
-	for i := 0; i < len(clients); i++ {
+	clientsReceiving := make(map[int32]bool)
+
+	for i := 0; i <= len(clients); i++ {
+		if i == id {
+			continue	
+		}
+		clientsReceiving[int32(i)] = true
+	}
+
+	log.Printf("Preparing to Receive from %v", len(clientsReceiving))
+	for len(clientsReceiving) != 0 {
+		
 		idx := <-receivedIdChan
+
+		if int32(id) == idx {
+			continue
+		}
+
 		dataLock.Lock()
 		result := data[idx]
 		dataLock.Unlock()
@@ -286,6 +303,12 @@ func checkAll(state interface{}, check CheckFn) {
 				log.Fatalf("Error!!!")
 			}
 		}()
+
+		_, ok := clientsReceiving[idx];
+    	if ok {
+        	delete(clientsReceiving, idx);
+    	}
+    	log.Printf("Remaining to receive from %v clients", len(clientsReceiving))
 	}
 
 	wg.Wait()

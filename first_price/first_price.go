@@ -41,6 +41,8 @@ type FpState struct {
 
 	PhisBeforeExponentiation [][]big.Int   // indices (i, j)
 	PhisAfterExponentiation  [][][]big.Int // indices (a, i, j)
+
+	sellerRound3 Round3
 }
 
 func getID(hosts []string) int {
@@ -384,7 +386,7 @@ func receiveRound3(FpState interface{}, results []*pb.OuterStruct) {
 			continue
 		}
 
-		log.Printf("Received Clientid", results[a].Clientid)
+		log.Printf("Received Clientid %v", results[a].Clientid)
 		
 		err := proto.Unmarshal(results[a].Data, &round3)
 		if err != nil {
@@ -410,13 +412,14 @@ func sellerReceiveRound3(FpState interface{}, results []*pb.OuterStruct) {
 	var round3 Round3
 
 	// Store all received alphas and betas
+	log.Printf("Results Size: %v", len(results))
 	for a := 0; a < len(results); a++ {
 		if a == *id {
 			continue
 		}
 		err := proto.Unmarshal(results[a].Data, &round3)
 		if err != nil {
-			log.Fatalf("Failed to unmarshal Round3.\n")
+			log.Fatalf("Seller failed to unmarshal Round3.\n")
 		}
 
 		s.PhisAfterExponentiation[a] = make([][]big.Int, len(s.keys))
@@ -434,15 +437,15 @@ func sellerReceiveRound3(FpState interface{}, results []*pb.OuterStruct) {
 		lib.PublishAll(results[a])
 	}
 
-	// myRound3 = Round3{
-	// 	DoublePhis:   doublePhis,
-	// 	DoubleProofs: proofs,
+	r, _ := proto.Marshal(&s.sellerRound3)
 
-	// out := &pb.OuterStruct{
-	// 	Clientid: int32(id),
-	// 	Stepid:   numRound + 1,
-	// 	Data:     marshalData(&myRound3),
-	// }
+	out := &pb.OuterStruct{
+		Clientid: int32(*id),
+		Stepid:   4,
+		Data:     r,
+	}
+
+	lib.PublishAll(out)
 
 	epilogue(s)
 }
@@ -670,10 +673,15 @@ func computeRound3(FpState interface{}) (proto.Message, bool) {
 		})
 	}
 
-	return &Round3{
+	var round3 Round3
+	round3 = Round3{
 		DoublePhis:   doublePhis,
 		DoubleProofs: proofs,
-	}, true
+	}
+	if *id == 0 {
+		s.sellerRound3 = round3	
+	}
+	return &round3, true
 }
 
 func epilogue(s *FpState) {
