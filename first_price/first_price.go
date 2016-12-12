@@ -57,8 +57,8 @@ func main() {
 	myAddr := hosts[*id]
 	lib.Init(*id)
 
-	fmt.Println("My address is: ", myAddr)
-	fmt.Println("My ID is: ", *id)
+	log.Println("My address is: ", myAddr)
+	log.Println("My ID is: ", *id)
 
 	go lib.RunServer(myAddr)
 
@@ -707,5 +707,8 @@ func epilogue(s *FpState) {
 		}
 	}
 
+	for true {
+		
+	}
 	log.Fatalf("Done")
 }
