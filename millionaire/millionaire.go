@@ -551,8 +551,8 @@ func main() {
 
 	myState := &state{}
 
-	hosts := lib.GetHosts()
-	*id = getID(hosts)
+	hosts, myID := lib.GetHostsAndID()
+	*id = myID
 
 	lib.Init(*id)
 	myAddr := hosts[*id]

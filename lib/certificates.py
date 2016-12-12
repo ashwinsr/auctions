@@ -68,14 +68,15 @@ subjectAltName = @alt_names
 [ alt_names ]
 DNS.1 = %(domain)s
 DNS.2 = *.%(domain)s
+IP.1 = %(domain)s
 """
 
-MYDIR = '../certs'
+MYDIR = './'
 OPENSSL = '/usr/bin/openssl'
 KEY_SIZE = 1024
 DAYS = 3650
-CA_CERT = 'ca.cert'
-CA_KEY = 'ca.key'
+CA_CERT = '../certs/ca.cert'
+CA_KEY = '../certs/ca.key'
 
 # Extra X509 args. Consider using e.g. ('-passin', 'pass:blah') if your
 # CA password is 'blah'. For more information, see:
@@ -111,31 +112,32 @@ def gencert(domain, rootdir=MYDIR, keysize=KEY_SIZE, days=DAYS,
             '-extensions', 'v3_req', '-extfile', dfile('config'),
             *X509_EXTRA_ARGS)
 
-def initialize():
-    os.chdir(MYDIR)
-
-def end():
-    os.chdir('..')
-
 def generate(domain, id):
+    # Clean up any old files
+    os.system("rm -f " + str(id) + ".zip")
+    
+    # Generate the certificate
     gencert(domain)
     
     # Rename things
-    os.rename("localhost.cert", str(id) + ".cert")
-    os.rename("localhost.key", str(id) + ".key")
-    os.remove("localhost.config")
-    os.remove("localhost.request")
+    os.rename(domain + ".cert", str(id) + ".cert")
+    os.rename(domain + ".key", str(id) + ".key")
 
-    return "certs/" + str(id)
+    # Remove temp files
+    os.remove(domain + ".config")
+    os.remove(domain + ".request")
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print "usage: %s <domain-name>" % sys.argv[0]
-        sys.exit(1)
-    gencert(sys.argv[1])
-    
-    # Rename things
-    os.rename("localhost.cert", sys.argv[2] + ".cert")
-    os.rename("localhost.key", sys.argv[2] + ".key")
-    os.remove("localhost.config")
-    os.remove("localhost.request")
+    # Zip up certificates into ID.zip
+    os.system("zip " + str(id) + " " + str(id) + ".*")
+
+    # Remove certificate files
+    os.remove(str(id) + ".cert")
+    os.remove(str(id) + ".key")
+
+    # Load the zip file into memory
+    certificates = open(str(id) + '.zip', 'r').read()
+
+    # Remove the zip file
+    os.remove(str(id) + ".zip")
+
+    return certificates

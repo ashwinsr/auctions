@@ -127,7 +127,7 @@ func RunServer(localHost string) {
 	}
 }
 
-func GetHosts() []string {
+func GetHostsAndID() ([]string, int) {
 	hostsFile, err := os.Open(*hostsFileName)
 	if err != nil {
 		log.Fatalf("Error opening hosts file: %v", err)
@@ -135,13 +135,14 @@ func GetHosts() []string {
 
 	var hosts struct {
 		Hosts []string `json:"hosts"`
+		MyID  int      `json:"myID"`
 	}
 
 	if err = json.NewDecoder(hostsFile).Decode(&hosts); err != nil {
 		log.Fatalf("Error opening hosts file: %v", err)
 	}
 
-	return hosts.Hosts
+	return hosts.Hosts, hosts.MyID
 }
 
 func getRootCertificate() []byte {

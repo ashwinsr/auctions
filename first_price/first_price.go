@@ -17,7 +17,7 @@ var (
 	bid       = flag.Uint("bid", 0, "Amount of money")
 )
 
-var K uint = 10
+var K uint = 100
 
 type AlphaBetaStruct struct {
 	alphas, betas []big.Int
@@ -45,27 +45,20 @@ type FpState struct {
 	sellerRound3 Round3
 }
 
-func getID(hosts []string) int {
-	for i, host := range hosts {
-		if host == *myAddress {
-			return i
-		}
-	}
-
-	return -1
-}
-
 func main() {
 	flag.Parse()
 
 	myState := &FpState{}
 
-	hosts := lib.GetHosts()
-	*id = getID(hosts)
+	hosts, myID := lib.GetHostsAndID()
+	*id = myID
 
 
 	myAddr := hosts[*id]
 	lib.Init(*id)
+
+	fmt.Println("My address is: ", myAddr)
+	fmt.Println("My ID is: ", *id)
 
 	go lib.RunServer(myAddr)
 
@@ -696,7 +689,7 @@ func epilogue(s *FpState) {
 				return &s.PhisAfterExponentiation[i][a][j]
 			})
 
-			log.Printf("Numerator: %v, Denominator: %v", numerator, denominator)
+			//log.Printf("Numerator: %v, Denominator: %v", numerator, denominator)
 
 			denominator.ModInverse(denominator, zkp.P)
 
@@ -705,7 +698,11 @@ func epilogue(s *FpState) {
 			vAJ.Mod(&vAJ, zkp.P)
 
 			if vAJ.Cmp(zkp.One) == 0 {
-				log.Printf("ID %v won at selling price %v", a, j)
+			    if (a == *id) {
+					log.Printf("I won at selling price %v!", j)
+				} else {
+				    log.Printf("I did not win. ID %v won at selling price %v.", a, j)
+				}
 			}
 		}
 	}
