@@ -54,10 +54,9 @@ var (
 var (
 	clients []lib_pb.ZKPAuctionClient
 	// Publish
-	// isReady      chan struct{}
 	receivedIdChan chan int32    = make(chan int32)
 	isReady        chan struct{} = make(chan struct{}, 1)
-
+	seller 		   lib_pb.ZKPAuctionClient
 	readyToReceiveNextRound *sync.Cond
 	numRoundLock            sync.Mutex
 )
@@ -101,7 +100,6 @@ func (s *server) Publish(ctx context.Context, in *pb.OuterStruct) (*google_proto
 		dataLock.Unlock()
 		log.Printf("RECEIVED DATA FOR ROUND ***************************** %v, Client id: %v", in.Stepid, in.Clientid)
 
-		// unlock numRoundLock
 		numRoundLock.Unlock()
 
 		receivedIdChan <- in.Clientid
@@ -198,8 +196,8 @@ func getServerCertificate() credentials.TransportCredentials {
 func InitClients(hosts []string, myAddr string) {
 	fmt.Println("InitClients InitClients InitClients")
 	// generate clients sequentially, not so bad
-	for _, host := range hosts {
-		fmt.Println("LOOP START")
+	for i, host := range hosts {
+
 		if host == myAddr {
 			continue
 		}
@@ -222,15 +220,16 @@ func InitClients(hosts []string, myAddr string) {
 		c := lib_pb.NewZKPAuctionClient(conn)
 
 		clients = append(clients, c)
-		fmt.Println("LOOP END")
+
+		if i == 0 {
+			seller = c
+		}
 	}
 
 	data = make([]*pb.OuterStruct, len(clients)+1)
-	fmt.Println(len(data))
 
 	readyToReceiveNextRound = sync.NewCond(&numRoundLock)
 
-	// log.Println("Finishing initializing clients")
 	isReady <- struct{}{}
 }
 
@@ -240,7 +239,7 @@ type Round struct {
 	Receive ReceiveFn
 }
 
-type ComputeFn func(interface{}) proto.Message
+type ComputeFn func(interface{}) (proto.Message, bool)
 type CheckFn func(interface{}, *pb.OuterStruct) error
 type ReceiveFn func(interface{}, []*pb.OuterStruct)
 
@@ -253,13 +252,14 @@ func marshalData(result proto.Message) (r []byte) {
 }
 
 // TODO use as part of library code
-func publishAll(out *pb.OuterStruct) {
+func PublishAll(out *pb.OuterStruct) {
 	// Publish data to all clients
 	for _, client := range clients {
 		// log.Println("Sending data to client...")
 		client := client
 		go func() {
 			// Needs to be a goroutine because otherwise we block waiting for a response
+			log.Printf("ID:%v Publishing to clientid:%v for Round:%v", id, out.Clientid, out.Stepid)
 			_, err := client.Publish(context.Background(), out)
 			if err != nil {
 				log.Fatalf("Error on sending data: %v", err)
@@ -273,8 +273,24 @@ func checkAll(state interface{}, check CheckFn) {
 	var wg sync.WaitGroup
 	wg.Add(len(clients))
 
-	for i := 0; i < len(clients); i++ {
+	clientsReceiving := make(map[int32]bool)
+
+	for i := 0; i <= len(clients); i++ {
+		if i == id {
+			continue	
+		}
+		clientsReceiving[int32(i)] = true
+	}
+
+	log.Printf("Preparing to Receive from %v", len(clientsReceiving))
+	for len(clientsReceiving) != 0 {
+		
 		idx := <-receivedIdChan
+
+		if int32(id) == idx {
+			continue
+		}
+
 		dataLock.Lock()
 		result := data[idx]
 		dataLock.Unlock()
@@ -288,6 +304,12 @@ func checkAll(state interface{}, check CheckFn) {
 				log.Fatalf("Error!!!")
 			}
 		}()
+
+		_, ok := clientsReceiving[idx];
+    	if ok {
+        	delete(clientsReceiving, idx);
+    	}
+    	log.Printf("Remaining to receive from %v clients", len(clientsReceiving))
 	}
 
 	wg.Wait()
@@ -295,8 +317,8 @@ func checkAll(state interface{}, check CheckFn) {
 
 func Register(rounds []Round, state interface{}) {
 	for _, round := range rounds {
-		result := round.Compute(state)
-
+		result, sendToSeller := round.Compute(state)
+		
 		var mData []byte
 		if result == nil {
 			mData = []byte{}
@@ -309,8 +331,6 @@ func Register(rounds []Round, state interface{}) {
 			Data:     mData,
 		}
 
-		// log.Printf("Finished marshalling...")
-
 		// Now that we've computed and marshalled
 		// tell everyone we can receive stuff from the next round
 		numRoundLock.Lock()
@@ -318,8 +338,18 @@ func Register(rounds []Round, state interface{}) {
 		readyToReceiveNextRound.Broadcast()
 		numRoundLock.Unlock()
 
-		// log.Printf("Publishing...")
-		publishAll(out)
+		if sendToSeller {
+			if id != 0 {
+				log.Printf("Sending to Seller")
+				_, err := seller.Publish(context.Background(), out)
+				if err != nil {
+					log.Fatalf("Error on sending data to seller: %v", err)
+				}
+			}
+		} else {
+			log.Printf("Publishing %v", round, id)
+			PublishAll(out)	
+		}
 
 		// log.Printf("Checking...")
 		checkAll(state, round.Check)
