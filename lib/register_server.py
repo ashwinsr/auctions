@@ -97,4 +97,6 @@ def download_auction_file():
     auc_json = json.dumps(auc_file)
     return Response(auc_json, mimetype="text/plain", headers={"Content-Disposition": "attachment;filename=hosts.auc"})
 
+app.run(host='0.0.0.0', port=80)
+
 ##### END SERVER CODE #####
