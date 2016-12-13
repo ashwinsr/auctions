@@ -56,13 +56,11 @@ func getState(state_ interface{}) (s *state) {
 var (
 	myAddress = flag.String("address", "localhost:1234", "address")
 	bid       = flag.Uint("bid", 0, "Amount of money")
-	// id        = flag.Int("id", -1, "ID")
 	id = new(int)
 )
 
 // ROUND 1 FUNCTIONS
 
-// TODO delete comment
 /*
  * 1. Generates a private/public key pair
  * 2. Generates zero-knowledge-proof of private key
@@ -130,7 +128,6 @@ func receiveRound1(state interface{}, results []*pb.OuterStruct) {
 	}
 
 	// Calculating final public key
-	// TODO SHOULD THIS BE MOD P? Probably doesn't matter, but just for computational practicality
 	s.publicKey.Set(zkp.One)
 	for _, key := range s.keys {
 		s.publicKey.Mul(&s.publicKey, &key)
@@ -170,8 +167,6 @@ func computeRound2(state interface{}) proto.Message {
 
 		// calculate beta_j
 		betaJ.Exp(zkp.G, &rJ, zkp.P)
-		// log.Printf("alpha_%v: %v\n", j, alphaJ)
-		// log.Printf("beta_%v: %v\n", j, betaJ)
 
 		alphasInts = append(alphasInts, alphaJ)
 		betasInts = append(betasInts, betaJ)
@@ -194,7 +189,7 @@ func computeRound2(state interface{}) proto.Message {
 		betas:  betasInts,
 	}
 
-	fmt.Println("Length of proofs")
+	fmt.Println("Length of proofs: ")
 	fmt.Println(len(proofs))
 
 	return &AlphaBeta{
@@ -220,7 +215,7 @@ func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 	fmt.Println(zkp.K_Mill)
 
 	if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != zkp.K_Mill {
-		log.Fatalf("Incorrect number of shit")
+		log.Fatalf("Incorrect number of alpha/betas in round 2")
 	}
 
 	alphas := pb.ByteSliceToBigIntSlice(in.Alphas)
@@ -272,7 +267,7 @@ func computeRound3(state interface{}) proto.Message {
 		gds = MillionaireCalculateGammaDelta(s.theirAlphasBetas.alphas, s.myAlphasBetas.alphas,
 			s.theirAlphasBetas.betas, s.myAlphasBetas.betas, *zkp.Y_Mill, *zkp.P)
 	}
-	// TODO for now just set both
+
 	s.myGammasDeltas = gds
 	s.theirGammasDeltas = gds
 
@@ -310,10 +305,7 @@ func computeRound5(state interface{}) proto.Message {
 	s.myExponentiatedGammasDeltas = &GammaDeltaStruct{}
 
 	// compute exponentiated gamma and delta
-	// TODO for now myGammasDeltas
 	for j := 0; j < int(zkp.K_Mill); j++ {
-		// log.Println("Beginning random exponentiation2")
-
 		// this is our random exponent
 		var m big.Int
 		m.Rand(zkp.RandGen, zkp.Q)
@@ -321,7 +313,6 @@ func computeRound5(state interface{}) proto.Message {
 		var newGamma, newDelta big.Int
 		newGamma.Exp(&s.myGammasDeltas.Gammas[j], &m, zkp.P)
 		newDelta.Exp(&s.myGammasDeltas.Deltas[j], &m, zkp.P)
-		// log.Println("Beginning random exponentiation3")
 
 		log.Printf("Computed m_%v = %v, gamma_%v = %v, delta_%v = %v\n", j, m.String(), j, newGamma.String(), j, newDelta.String())
 
@@ -338,7 +329,6 @@ func computeRound5(state interface{}) proto.Message {
 		// create proof and add it to proof list
 		ts, r := zkp.DiscreteLogEquality(m, gs, *zkp.P, *zkp.Q)
 
-		// TODO remove
 		//checking the proof here before we send it
 		var results, results2 []big.Int
 		var a, b big.Int
@@ -379,7 +369,7 @@ func checkRound5(state interface{}, result *pb.OuterStruct) (err error) {
 	}
 
 	if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != zkp.K_Mill {
-		log.Fatalf("Incorrect number of shit4")
+		log.Fatalf("Incorrect number of gamma/deltas in round 5")
 	}
 
 	gammas := pb.ByteSliceToBigIntSlice(in.Gammas)
@@ -427,7 +417,7 @@ func receiveRound5(state interface{}, results []*pb.OuterStruct) {
 
 func computeRound6(state interface{}) proto.Message {
 	s := getState(state)
-	// log.Println("Beginning decryption")
+	log.Println("Beginning decryption")
 
 	var proofs []*pb.DiscreteLogEquality
 
@@ -481,7 +471,7 @@ func checkRound6(state interface{}, result *pb.OuterStruct) (err error) {
 
 	if len(in.Phis) != len(in.Proofs) || uint(len(in.Proofs)) != zkp.K_Mill {
 		log.Printf("len of phis=%v, len of proofs=%v, k=%v\n", len(in.Phis), uint(len(in.Proofs)), zkp.K_Mill)
-		log.Fatalf("Incorrect number of shit6")
+		log.Fatalf("Incorrect number of phis or proofs in round 6")
 	}
 
 	phis := pb.ByteSliceToBigIntSlice(in.Phis)
@@ -517,7 +507,8 @@ func receiveRound6(state interface{}, results []*pb.OuterStruct) {
 		log.Fatalf("Failed to unmarshal DecryptionInfo.\n")
 	}
 	log.Printf("%v\n", decInfo)
-	// Calculate the final shit (division + which one is bigger)
+
+	// Calculate the final output (division + which one is bigger)
 	phis := pb.ByteSliceToBigIntSlice(decInfo.Phis)
 	for j := 0; j < int(zkp.K_Mill); j++ {
 
@@ -534,16 +525,6 @@ func receiveRound6(state interface{}, results []*pb.OuterStruct) {
 		}
 	}
 	log.Fatalf("ID 1 is the winner\n")
-}
-
-func getID(hosts []string) int {
-	for i, host := range hosts {
-		if host == *myAddress {
-			return i
-		}
-	}
-
-	return -1
 }
 
 func main() {

@@ -27,17 +27,6 @@ import (
 	_ "net/http/pprof"
 )
 
-// TODO debugging
-// func init() {
-//   go func() {
-//     log.Println(http.ListenAndServe("localhost:6060", nil))
-//   }()
-// }
-
-// Need to convert to using command line options for a lot of these
-
-// Note we have no fault tolerance in these protocols.
-
 var (
 	id           int
 	numRound     int32 = 0
@@ -46,7 +35,6 @@ var (
 	clientsReady sync.Once
 )
 
-// channels for each round
 /*
  * These are here so that protobuf data, if received before we have moved
  * onto the next round, just wait in the channel until we are ready.
@@ -61,9 +49,6 @@ var (
 	numRoundLock            sync.Mutex
 )
 
-// TODO millionaire specific
-// TODO delete
-
 var (
 	hostsFileName = flag.String("hosts", "../hosts.auc", "JSON file with lists of hosts to communicate with")
 )
@@ -72,29 +57,19 @@ var (
 type server struct{}
 
 func (s *server) Publish(ctx context.Context, in *pb.OuterStruct) (*google_protobuf.Empty, error) {
-	// fmt.Println("Publish Publish Publish")
-
 	go func() {
-		// fmt.Println("Before wedding")
 		clientsReady.Do(func() {
-			// fmt.Println("In the wedding")
 			<-isReady
 		})
-		// fmt.Println("After wedding")
-
-		// log.Println("Received Client id: ", in.Clientid, "\n")
 		numRoundLock.Lock()
 
 		for {
-			// log.Printf("For looping client id %v\n", in.Clientid)
 			if in.Stepid == numRound {
 				break
 			}
 			readyToReceiveNextRound.Wait()
-			// log.Printf("Got through (client id %v)\n", in.Clientid)
 		}
 
-		// TODO THIS IS FUCKING STUPID BUT OK FOR NOW
 		dataLock.Lock()
 		data[in.Clientid] = in
 		dataLock.Unlock()
@@ -194,7 +169,7 @@ func getServerCertificate() credentials.TransportCredentials {
 }
 
 func InitClients(hosts []string, myAddr string) {
-	fmt.Println("InitClients InitClients InitClients")
+	fmt.Println("Initializing clients!")
 	// generate clients sequentially, not so bad
 	for i, host := range hosts {
 
@@ -216,6 +191,7 @@ func InitClients(hosts []string, myAddr string) {
 		if err != nil {
 			log.Fatalf("Did not connect (to host %v): %v", host, err)
 		}
+
 		// defer conn.Close() TODO: This needs to happen at somepoint, but not here
 		c := lib_pb.NewZKPAuctionClient(conn)
 
@@ -251,13 +227,12 @@ func marshalData(result proto.Message) (r []byte) {
 	return
 }
 
-// TODO use as part of library code
 func PublishAll(out *pb.OuterStruct) {
 	// Publish data to all clients
 	for _, client := range clients {
-		// log.Println("Sending data to client...")
 		client := client
 		go func() {
+
 			// Needs to be a goroutine because otherwise we block waiting for a response
 			log.Printf("ID:%v Publishing to clientid:%v for Round:%v", id, out.Clientid, out.Stepid)
 			_, err := client.Publish(context.Background(), out)
@@ -268,7 +243,6 @@ func PublishAll(out *pb.OuterStruct) {
 	}
 }
 
-// TODO use inside of gRPC publish call
 func checkAll(state interface{}, check CheckFn) {
 	var wg sync.WaitGroup
 	wg.Add(len(clients))
@@ -351,9 +325,7 @@ func Register(rounds []Round, state interface{}) {
 			PublishAll(out)	
 		}
 
-		// log.Printf("Checking...")
 		checkAll(state, round.Check)
-		// log.Printf("Receiving...")
 		round.Receive(state, data)
 	}
 }

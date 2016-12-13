@@ -1,8 +1,8 @@
 ######################INSTRUCTIONS#####################
 #
-# To create a new auction: curl localhost:5000/create
-# To register for the auction: wget --content-disposition localhost:5000/register
-# To download the auction file: wget --content-disposition localhost:5000/download_auc
+# To create a new auction: curl localhost/create
+# To register for the auction: wget --content-disposition localhost/register
+# To download the auction file: wget --content-disposition localhost/download_auc
 #
 ########################################################
 
@@ -61,7 +61,7 @@ auction = None
 def get_request_IP(request):
     return request.access_route[0]
 
-@app.route('/create')
+@app.route('/create', methods=['GET'])
 def create_auction():
     global auction
     request_ip = get_request_IP(request)
@@ -70,8 +70,11 @@ def create_auction():
     auction = Auction()
     return "You have successfully created a new auction!\n"
 
-@app.route('/register')
+@app.route('/register', methods=['GET'])
 def register():
+    if request.method == 'HEAD':
+        return
+
     global auction
     if auction is None:
         return "No open auction exists\n"
@@ -82,8 +85,11 @@ def register():
 
     return Response(certs, mimetype="text/plain", headers={"Content-Disposition": "attachment;filename=" + str(id) + ".zip"})
 
-@app.route('/download_auc')
+@app.route('/download_auc', methods=['GET'])
 def download_auction_file():
+    if request.method == 'HEAD':
+        return
+
     global auction
     if auction is None:
         return "No open auction exists\n"

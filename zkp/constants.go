@@ -13,7 +13,6 @@ var P = big.NewInt(34531109)
 var Q = big.NewInt(8632777)
 var G = big.NewInt(19044154)
 
-// TODO millionaire specific
 // TODO different than G LOL
 var Y_Mill = big.NewInt(19044154)
 var K_Mill uint = 64

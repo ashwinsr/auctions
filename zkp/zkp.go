@@ -406,8 +406,6 @@ func GenerateG(p *big.Int, q *big.Int) big.Int {
 }
 
 // g is arbitrary generator of G_q, y is public key, t and r are the ZKP, and p and q are the primes
-// TODO code quality, structs, etc...
-// TODO should probably use big.Int pointers everywhere
 func CheckDiscreteLogKnowledgeProof(g big.Int, y big.Int, t big.Int, r big.Int, p big.Int, q big.Int) (err error) {
 	var tv big.Int
 
@@ -487,7 +485,6 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	temp_1.Mod(&temp_1, &q)
 	if temp_1.Cmp(&c) != 0 {
 		err = fmt.Errorf("1 - WRONG! Calculated %v, received %v.\n", temp_1, c)
-		fmt.Println("1")
 	}
 
 	// Check a_1 = g^r_1 * beta^d_1
@@ -497,7 +494,6 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	temp_1.Mod(&temp_1, &p)
 	if temp_1.Cmp(&a_1) != 0 {
 		err = fmt.Errorf("2 - WRONG! Calculated %v, received %v.\n", temp_1, a_1)
-		fmt.Println("2")
 	}
 
 	// Check a_2 = g^r_2 * beta^d_2
@@ -507,7 +503,6 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	temp_1.Mod(&temp_1, &p)
 	if temp_1.Cmp(&a_2) != 0 {
 		err = fmt.Errorf("3 - WRONG! Calculated %v, received %v.\n", temp_1, a_2)
-		fmt.Println("3")
 	}
 
 	// Check b_1 = y^r_1 * (alpha/z)^d_1
@@ -519,7 +514,6 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	temp_1.Mod(&temp_1, &p)
 	if temp_1.Cmp(&b_1) != 0 {
 		err = fmt.Errorf("4 - WRONG! Calculated %v, received %v.\n", temp_1, b_1)
-		fmt.Println("4")
 	}
 
 	// Check b_2 = y^r_2 * alpha^d_2
@@ -529,7 +523,6 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	temp_1.Mod(&temp_1, &p)
 	if temp_1.Cmp(&b_2) != 0 {
 		err = fmt.Errorf("5 - WRONG! Calculated %v, received %v.\n", temp_1, b_2)
-		fmt.Println("5")
 	}
 
 	return
@@ -561,13 +554,13 @@ func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, p big.Int, q b
 		var ct big.Int
 		ct.Exp(&c[i], &t[i], nil)
 		LHS1.Mul(&LHS1, &ct)
-		// LHS1.Mod(&LHS1, ) This needs to be figured out
+		// LHS1.Mod(&LHS1, ) This needs to be figured out TODO
 
 		ct.Mul(&t[i], &t[i])
 		ct.Exp(&c[i], &ct, nil) // Modulo issues
 
 		LHS2.Mul(&LHS2, &ct)
-		// LHS2.Mod(LHS2, ) This needs to be figured out
+		// LHS2.Mod(LHS2, ) This needs to be figured out TODO
 
 		var Ef Ciphertext
 		Ef.Alpha.Mul(&E[i].Alpha, &f[i])
