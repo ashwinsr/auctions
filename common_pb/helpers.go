@@ -1,6 +1,10 @@
 package common_pb
 
-import "math/big"
+import (
+	"math/big"
+
+	"github.com/ashwinsr/auctions/zkp"
+)
 
 func CreateIsOneOfTwo(a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2 big.Int) *EqualsOneOfTwo {
 	return &EqualsOneOfTwo{
@@ -38,22 +42,55 @@ func DestructDiscreteLogKnowledge(proof *DiscreteLogKnowledge) (t, r big.Int) {
 }
 
 func CreateDiscreteLogEquality(ts []big.Int, r big.Int) *DiscreteLogEquality {
-	var logEqualityProof DiscreteLogEquality
-	for _, t := range ts {
-		logEqualityProof.Ts = append(logEqualityProof.Ts, t.Bytes())
+	return &DiscreteLogEquality{
+		Ts: BigIntSliceToByteSlice(ts),
+		R:  r.Bytes(),
 	}
-	logEqualityProof.R = r.Bytes()
-
-	return &logEqualityProof
 }
 
 func DestructDiscreteLogEquality(proof *DiscreteLogEquality) (ts []big.Int, r big.Int) {
 	r.SetBytes(proof.R)
-	for _, t := range proof.Ts {
-		var t_temp big.Int
-		t_temp.SetBytes(t)
-		ts = append(ts, t_temp)
+	ts = ByteSliceToBigIntSlice(proof.Ts)
+	return
+}
+
+func CreateVerifiableSecretShuffle(c []big.Int, cd big.Int, cD big.Int, ER zkp.Ciphertext,
+	f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int,
+	yD big.Int, zD big.Int, Z big.Int) *VerifiableShuffle {
+	return &VerifiableShuffle{
+		C:         BigIntSliceToByteSlice(c),
+		Cd:        cd.Bytes(),
+		CCapitalD: cD.Bytes(),
+		ERalpha:   ER.Alpha.Bytes(),
+		ERbeta:    ER.Beta.Bytes(),
+		F:         BigIntSliceToByteSlice(f),
+		Fd:        fd.Bytes(),
+		Yd:        yd.Bytes(),
+		Zd:        zd.Bytes(),
+		BigF:      BigIntSliceToByteSlice(F),
+		YCapitalD: yD.Bytes(),
+		ZCapitalD: zD.Bytes(),
+		CapitalZ:  Z.Bytes(),
 	}
+}
+
+func DestructVerifiableSecretShuffle(proof *VerifiableShuffle) (
+	c []big.Int, cd big.Int, cD big.Int, ER zkp.Ciphertext,
+	f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int,
+	yD big.Int, zD big.Int, Z big.Int) {
+	c = ByteSliceToBigIntSlice(proof.C)
+	cd.SetBytes(proof.Cd)
+	cD.SetBytes(proof.CCapitalD)
+	ER.Alpha.SetBytes(proof.ERalpha)
+	ER.Beta.SetBytes(proof.ERbeta)
+	f = ByteSliceToBigIntSlice(proof.F)
+	fd.SetBytes(proof.Fd)
+	yd.SetBytes(proof.Yd)
+	zd.SetBytes(proof.Zd)
+	F = ByteSliceToBigIntSlice(proof.BigF)
+	yD.SetBytes(proof.YCapitalD)
+	zD.SetBytes(proof.ZCapitalD)
+	Z.SetBytes(proof.CapitalZ)
 	return
 }
 

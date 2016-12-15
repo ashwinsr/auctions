@@ -3,7 +3,6 @@ package zkp
 import (
 	// "fmt"
 	"math/big"
-	"math/rand"
 	"testing"
 )
 
@@ -100,17 +99,6 @@ func TestEncryptedValueIsOneOfTwo(test *testing.T) {
 			test.Error(err)
 		}
 	}
-}
-
-func makeRandPerm(n int) Permutation {
-	perm := rand.Perm(n)
-	var revperm []int
-	revperm = make([]int, n)
-
-	for i := 0; i < n; i++ {
-		revperm[perm[i]] = i
-	}
-	return Permutation{Forward: perm, Backward: revperm}
 }
 
 func TestVerifiableSecretShuffle(test *testing.T) {
