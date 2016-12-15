@@ -3,9 +3,9 @@
  * auction among multiple bidders for a single item. The description
  * of the protocol itself can be found in:
  *
- * Brandt, Felix. "How to obtain full privacy in auctions." 
+ * Brandt, Felix. "How to obtain full privacy in auctions."
  * International Journal of Information Security 5.4 (2006): 201-216.
- * 
+ *
  * To invoke, run:
  *          go run *.go -bid=<BID VALUE>
  */
@@ -78,7 +78,7 @@ func main() {
 
 	var rounds []lib.Round
 
-	// Register all the computation rounds with the library	
+	// Register all the computation rounds with the library
 	if *id == 0 {
 		// If seller
 		rounds = []lib.Round{
@@ -86,7 +86,7 @@ func main() {
 			{computeRound1, checkRound1, receiveRound1},
 			{computeRound2, checkRound2, receiveRound2},
 			{computeRound3, checkRound3, sellerReceiveRound3},
-		}	
+		}
 	} else {
 		// If bidder
 		rounds = []lib.Round{
@@ -94,9 +94,9 @@ func main() {
 			{computeRound1, checkRound1, receiveRound1},
 			{computeRound2, checkRound2, receiveRound2},
 			{computeRound3, checkRound3, receiveRound3},
-		}		
+		}
 	}
-	
+
 	lib.Register(rounds, myState)
 
 }
@@ -107,18 +107,6 @@ func getFpState(state interface{}) (s *FpState) {
 		log.Fatalf("Failed to typecast FpState.\n")
 	}
 	return
-}
-
-func computeArrayRangeProduct(arr []big.Int, start, end uint) big.Int {
-	var product big.Int
-	product.Set(zkp.One)
-
-	for i := start; i < end; i++ {
-		product.Mul(&product, &arr[i])
-		product.Mod(&product, zkp.P) // TODO Check Mod
-	}
-
-	return product
 }
 
 func checkPrologue(state interface{}, result *pb.OuterStruct) (err error) {
@@ -380,7 +368,7 @@ func receiveRound3(FpState interface{}, results []*pb.OuterStruct) {
 		}
 
 		log.Printf("Received Clientid %v", results[a].Clientid)
-		
+
 		err := proto.Unmarshal(results[a].Data, &round3)
 		if err != nil {
 			log.Fatalf("Failed to unmarshal Round3.\n", results[a])
@@ -478,7 +466,7 @@ func computeRound1(FpState interface{}) (proto.Message, bool) {
 		rJ.Rand(zkp.RandGen, zkp.Q)
 		sumR.Add(&sumR, &rJ)
 
-		alphaJ.Exp(&s.publicKey, &rJ, zkp.P) // TODO mod P?
+		alphaJ.Exp(&s.publicKey, &rJ, zkp.P)
 
 		if j == *bid {
 			m.Set(zkp.Y_Mill)
@@ -667,7 +655,7 @@ func computeRound3(FpState interface{}) (proto.Message, bool) {
 		DoubleProofs: proofs,
 	}
 	if *id == 0 {
-		s.sellerRound3 = round3	
+		s.sellerRound3 = round3
 	}
 	return &round3, true
 }
@@ -691,17 +679,17 @@ func epilogue(s *FpState) {
 			vAJ.Mod(&vAJ, zkp.P)
 
 			if vAJ.Cmp(zkp.One) == 0 {
-			    if (a == *id) {
+				if a == *id {
 					log.Printf("I won at selling price %v!", j)
 				} else {
-				    log.Printf("I did not win. ID %v won at selling price %v.", a, j)
+					log.Printf("I did not win. ID %v won at selling price %v.", a, j)
 				}
 			}
 		}
 	}
 
 	for true {
-		
+
 	}
 	log.Fatalf("Done")
 }

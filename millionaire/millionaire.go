@@ -56,7 +56,7 @@ func getState(state_ interface{}) (s *state) {
 var (
 	myAddress = flag.String("address", "localhost:1234", "address")
 	bid       = flag.Uint("bid", 0, "Amount of money")
-	id = new(int)
+	id        = new(int)
 )
 
 // ROUND 1 FUNCTIONS
@@ -489,14 +489,6 @@ func computeRound5(state interface{}) proto.Message {
 		results = append(results, b)
 		results2 = append(results2, s.myExponentiatedGammasDeltas.Gammas[j])
 		results2 = append(results2, s.myExponentiatedGammasDeltas.Deltas[j])
-		// err := zkp.CheckDiscreteLogEqualityProof(gs, results, ts, r, *zkp.P, *zkp.Q)
-		// // log.Printf("Creating proof.\nBases=%v\nExponent=%v\nResults=%v\nResults2=%v\nTs=%vn,R=%v\n", gs, m, results, results2, ts, r)
-		// if err != nil {
-		// 	log.Printf("WHAT THE heck %v\n", err)
-		// } else {
-		// 	// log.Printf("Yay!!! Correct exponentiatedGammas exponentiatedDeltas proof")
-		// }
-		// TODO done
 
 		proofs = append(proofs, pb.CreateDiscreteLogEquality(ts, r))
 
