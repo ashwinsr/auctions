@@ -14,10 +14,12 @@ import (
 
 var C_P = big.NewInt(7)
 var C_Q = big.NewInt(11)
+var C_N = big.NewInt(77)
+
 var C_Pprime = big.NewInt(3)
 var C_Qprime = big.NewInt(5)
 var C_PQ = big.NewInt(15)
-var C_N = big.NewInt(77)
+
 
 func GenerateGCommitment() (g big.Int) {
 	var j, phi, temp, h, C_NMinusOne, mod1, mod2 big.Int

@@ -114,7 +114,7 @@ func makeRandPerm(n int) Permutation {
 }
 
 func TestVerifiableSecretShuffle(test *testing.T) {
-	for i := 0; i < NumTests; i++ {
+	for i := 0; i < NumTests*10; i++ {
 		var e, E []Ciphertext
 		var x, y, r, m big.Int
 		var R []big.Int
@@ -125,7 +125,7 @@ func TestVerifiableSecretShuffle(test *testing.T) {
 		x.Rand(RandGen, Q) // x = rand() mod Q // TODO also shouldn't be 0
 		y.Exp(&g, &x, P)   // y = g^x mod P
 
-		n := 10
+		n := 100
 
 		for j := 0; j < n; j++ {
 			m.Rand(RandGen, P) // Some message

@@ -245,7 +245,7 @@ func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.In
 
 		temp.Exp(&E[i].Beta, &D[i], &p)
 		ER.Beta.Mul(&ER.Beta, &temp)
-		ER.Alpha.Mod(&ER.Alpha, &p)
+		ER.Beta.Mod(&ER.Beta, &p)
 
 		c_i := make([]big.Int, n+2) // TODO: put this outside the for loop
 
@@ -541,6 +541,8 @@ func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, p big.Int, q b
 	n := len(e)
 	t := make([]big.Int, n)
 
+	fmt.Println(f)
+
 	var fD big.Int
 	fD = *Zero
 
@@ -570,19 +572,19 @@ func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, p big.Int, q b
 		// LHS2.Mod(LHS2, ) This needs to be figured out
 
 		var Ef Ciphertext
-		Ef.Alpha.Mul(&E[i].Alpha, &f[i])
-		Ef.Beta.Mul(&E[i].Beta, &f[i])
+		Ef.Alpha.Exp(&E[i].Alpha, &f[i], &p)
+		Ef.Beta.Exp(&E[i].Beta, &f[i], &p)
 		LHS3.Alpha.Mul(&LHS3.Alpha, &Ef.Alpha)
 		LHS3.Beta.Mul(&LHS3.Beta, &Ef.Beta)
-		LHS3.Alpha.Mod(&LHS3.Alpha, P) // Modulo needs to be figured
-		LHS3.Beta.Mod(&LHS3.Beta, P)   // Modulo needs to be figured
+		LHS3.Alpha.Mod(&LHS3.Alpha, &p) // Modulo needs to be figured
+		LHS3.Beta.Mod(&LHS3.Beta, &p)   // Modulo needs to be figured
 
 		RHS1_commitment_array[i] = f[i]
 		RHS2_commitment_array[i] = F[i]
 
 		var et Ciphertext
-		et.Alpha.Mul(&e[i].Alpha, &t[i])
-		et.Beta.Mul(&e[i].Beta, &t[i])
+		et.Alpha.Exp(&e[i].Alpha, &t[i], nil)
+		et.Beta.Exp(&e[i].Beta, &t[i], nil)
 
 		RHS3.Alpha.Mul(&RHS3.Alpha, &et.Alpha)
 		RHS3.Beta.Mul(&RHS3.Beta, &et.Beta)
@@ -598,7 +600,7 @@ func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, p big.Int, q b
 
 	var RHS3_part Ciphertext
 
-	RHS3_part = EncryptElGamal(One, &Z, &y, P, Q, &g)
+	RHS3_part = EncryptElGamal(One, &Z, &y, &p, &q, &g)
 	// fmt.Println(RHS3.Alpha)
 	// fmt.Println(RHS3.Beta)
 
@@ -608,8 +610,11 @@ func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, p big.Int, q b
 	RHS3.Alpha.Mul(&RHS3.Alpha, &RHS3_part.Alpha)
 	RHS3.Beta.Mul(&RHS3.Beta, &RHS3_part.Beta)
 
-	RHS3.Alpha.Mod(&RHS3.Alpha, P) // TODO Modulo
-	RHS3.Beta.Mod(&RHS3.Beta, P)   // TODO Modulo
+	RHS3.Alpha.Mul(&RHS3.Alpha, &ER.Alpha)
+	RHS3.Beta.Mul(&RHS3.Beta, &ER.Beta)
+
+	RHS3.Alpha.Mod(&RHS3.Alpha, &p) // TODO Modulo
+	RHS3.Beta.Mod(&RHS3.Beta, &p)   // TODO Modulo
 
 	RHS1_commitment_array[n] = yd
 	RHS2_commitment_array[n] = fD
