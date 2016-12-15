@@ -42,9 +42,9 @@ var (
 var (
 	clients []lib_pb.ZKPAuctionClient
 	// Publish
-	receivedIdChan chan int32    = make(chan int32)
-	isReady        chan struct{} = make(chan struct{}, 1)
-	seller 		   lib_pb.ZKPAuctionClient
+	receivedIdChan          chan int32    = make(chan int32)
+	isReady                 chan struct{} = make(chan struct{}, 1)
+	seller                  lib_pb.ZKPAuctionClient
 	readyToReceiveNextRound *sync.Cond
 	numRoundLock            sync.Mutex
 )
@@ -192,7 +192,6 @@ func InitClients(hosts []string, myAddr string) {
 			log.Fatalf("Did not connect (to host %v): %v", host, err)
 		}
 
-		// defer conn.Close() TODO: This needs to happen at somepoint, but not here
 		c := lib_pb.NewZKPAuctionClient(conn)
 
 		clients = append(clients, c)
@@ -251,14 +250,14 @@ func checkAll(state interface{}, check CheckFn) {
 
 	for i := 0; i <= len(clients); i++ {
 		if i == id {
-			continue	
+			continue
 		}
 		clientsReceiving[int32(i)] = true
 	}
 
 	log.Printf("Preparing to Receive from %v", len(clientsReceiving))
 	for len(clientsReceiving) != 0 {
-		
+
 		idx := <-receivedIdChan
 
 		if int32(id) == idx {
@@ -279,11 +278,11 @@ func checkAll(state interface{}, check CheckFn) {
 			}
 		}()
 
-		_, ok := clientsReceiving[idx];
-    	if ok {
-        	delete(clientsReceiving, idx);
-    	}
-    	log.Printf("Remaining to receive from %v clients", len(clientsReceiving))
+		_, ok := clientsReceiving[idx]
+		if ok {
+			delete(clientsReceiving, idx)
+		}
+		log.Printf("Remaining to receive from %v clients", len(clientsReceiving))
 	}
 
 	wg.Wait()
@@ -292,7 +291,7 @@ func checkAll(state interface{}, check CheckFn) {
 func Register(rounds []Round, state interface{}) {
 	for _, round := range rounds {
 		result, sendToSeller := round.Compute(state)
-		
+
 		var mData []byte
 		if result == nil {
 			mData = []byte{}
@@ -322,7 +321,7 @@ func Register(rounds []Round, state interface{}) {
 			}
 		} else {
 			log.Printf("Publishing %v", round, id)
-			PublishAll(out)	
+			PublishAll(out)
 		}
 
 		checkAll(state, round.Check)

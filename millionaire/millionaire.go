@@ -32,7 +32,6 @@ type state struct {
 	publicKey    big.Int
 	currRound    int
 
-	// TODO millionaire specific
 	myAlphasBetas                 *AlphaBetaStruct
 	theirAlphasBetas              *AlphaBetaStruct
 	myGammasDeltas                *GammaDeltaStruct
@@ -363,7 +362,7 @@ func computeRound4(state interface{}) proto.Message {
 	}
 
 	s := getState(state)
-	// TODO
+
 	// if our ID is 1 we verifiably secret shuffle what we received from ID 0 last round
 	e := zkp.AlphasBetasToCipherTexts(s.theirGammasDeltas.Gammas, s.theirGammasDeltas.Deltas)
 	E, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z :=
@@ -568,7 +567,6 @@ func computeRound6(state interface{}) proto.Message {
 	s.phisBeforeExponentiation = new(PhiStruct)
 
 	// compute exponentiated gamma and delta
-	// TODO for now myGammasDeltas
 	for i := 0; i < int(zkp.K_Mill); i++ {
 		// calculate phi
 		var phi, phi2 big.Int
