@@ -72,7 +72,8 @@ func computeRound1(state interface{}) proto.Message {
 	s := getState(state)
 
 	// Generate private key
-	s.myPrivateKey.Rand(zkp.RandGen, zkp.Q)
+	s.myPrivateKey.Rand(zkp.RandGen, new(big.Int).Sub(zkp.Q, One))
+	s.myPrivateKey.Add(&s.myPrivateKey, zkp.One)
 	// Calculate public key
 	s.myPublicKey.Exp(zkp.G, &s.myPrivateKey, zkp.P)
 
@@ -158,7 +159,7 @@ func computeRound2(state interface{}) proto.Message {
 
 		// calculate alpha_j
 		// log.Printf("Public key: %v, Rj: %v, P: %v\n", s.publicKey, rJ, *zkp.P)
-		alphaJ.Exp(&s.publicKey, &rJ, zkp.P) // TODO mod P?
+		alphaJ.Exp(&s.publicKey, &rJ, zkp.P)
 		if Bij == 1 {
 			alphaJ.Mul(&alphaJ, zkp.Y_Mill)
 			alphaJ.Mod(&alphaJ, zkp.P)
@@ -188,8 +189,8 @@ func computeRound2(state interface{}) proto.Message {
 		betas:  betasInts,
 	}
 
-	fmt.Println("Length of proofs: ")
-	fmt.Println(len(proofs))
+	// log.Println("Length of proofs: ")
+	// log.Println(len(proofs))
 
 	return &AlphaBeta{
 		Alphas: pb.BigIntSliceToByteSlice(alphasInts),

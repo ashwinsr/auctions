@@ -32,7 +32,6 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-// TODO millionaire specific
 type AlphaBeta struct {
 	Alphas [][]byte                    `protobuf:"bytes,1,rep,name=alphas,proto3" json:"alphas,omitempty"`
 	Betas  [][]byte                    `protobuf:"bytes,2,rep,name=betas,proto3" json:"betas,omitempty"`
@@ -51,7 +50,6 @@ func (m *AlphaBeta) GetProofs() []*common_pb.EqualsOneOfTwo {
 	return nil
 }
 
-// TODO millionaire specific
 type MixedOutput struct {
 	Gammas [][]byte                     `protobuf:"bytes,1,rep,name=gammas,proto3" json:"gammas,omitempty"`
 	Deltas [][]byte                     `protobuf:"bytes,2,rep,name=deltas,proto3" json:"deltas,omitempty"`
@@ -70,7 +68,6 @@ func (m *MixedOutput) GetProof() *common_pb.VerifiableShuffle {
 	return nil
 }
 
-// TODO millionaire specific
 type RandomizedOutput struct {
 	Gammas [][]byte                         `protobuf:"bytes,1,rep,name=gammas,proto3" json:"gammas,omitempty"`
 	Deltas [][]byte                         `protobuf:"bytes,2,rep,name=deltas,proto3" json:"deltas,omitempty"`
@@ -89,7 +86,6 @@ func (m *RandomizedOutput) GetProofs() []*common_pb.DiscreteLogEquality {
 	return nil
 }
 
-// TODO millionaire specific
 type DecryptionInfo struct {
 	Phis   [][]byte                         `protobuf:"bytes,1,rep,name=phis,proto3" json:"phis,omitempty"`
 	Proofs []*common_pb.DiscreteLogEquality `protobuf:"bytes,2,rep,name=proofs" json:"proofs,omitempty"`

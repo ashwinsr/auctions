@@ -435,7 +435,8 @@ func computePrologue(FpState interface{}) (proto.Message, bool) {
 	s := getFpState(FpState)
 
 	// Generate private key
-	s.myPrivateKey.Rand(zkp.RandGen, zkp.Q)
+	s.myPrivateKey.Rand(zkp.RandGen, new(big.Int).Sub(zkp.Q, One))
+	s.myPrivateKey.Add(&s.myPrivateKey, zkp.One)
 	// Calculate public key
 	s.myPublicKey.Exp(zkp.G, &s.myPrivateKey, zkp.P)
 

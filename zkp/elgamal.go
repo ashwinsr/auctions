@@ -1,7 +1,6 @@
 package zkp
 
 import (
-	// "fmt"
 	"math/big"
 	"math/rand"
 )

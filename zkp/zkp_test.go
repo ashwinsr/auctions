@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// TODO CHECK INCORRECT VALUES ANUNAY YOU FUCK
+// FIXME test soundness as well, not just completeness
 
 func TestDiscreteLogKnowledge(test *testing.T) {
 	for i := 0; i < NumTests; i++ {
@@ -15,8 +15,9 @@ func TestDiscreteLogKnowledge(test *testing.T) {
 		g := GenerateG(P, Q)
 
 		// Generate private key, public key pair
-		x.Rand(RandGen, Q) // x = rand() mod Q // TODO also shouldn't be 0
-		y.Exp(&g, &x, P)   // y = g^x mod P
+		x.Rand(RandGen, new(big.Int).Sub(Q, One))
+		x.Add(&x, One)   // x is in [1, ..., Q]
+		y.Exp(&g, &x, P) // y = g^x mod P
 
 		// Generate zero-knowledge proof
 		t, r := DiscreteLogKnowledge(x, g, *P, *Q)
@@ -34,7 +35,8 @@ func TestDiscreteLogEquality(test *testing.T) {
 
 		// Generate private key
 		var x big.Int
-		x.Rand(RandGen, Q)
+		x.Rand(RandGen, new(big.Int).Sub(Q, One))
+		x.Add(&x, One) // x is in [1, ..., Q]
 
 		G := GenerateGs(P, Q, 10)
 
@@ -63,7 +65,8 @@ func TestEncryptedValueIsOneOfTwo(test *testing.T) {
 
 		// Generate public/private key pairs
 		g := GenerateG(P, Q)
-		x.Rand(RandGen, Q) // x = rand() mod Q
+		x.Rand(RandGen, new(big.Int).Sub(Q, One))
+		x.Add(&x, One)     // x is in [1, ..., Q]
 		y.Exp(&g, &x, P)   // y = g^x mod P
 		r.Rand(RandGen, Q) // r = rand() mod Q
 
@@ -110,8 +113,9 @@ func TestVerifiableSecretShuffle(test *testing.T) {
 		g := GenerateG(P, Q)
 
 		// Generate private key, public key pair
-		x.Rand(RandGen, Q) // x = rand() mod Q // TODO also shouldn't be 0
-		y.Exp(&g, &x, P)   // y = g^x mod P
+		x.Rand(RandGen, new(big.Int).Sub(Q, One))
+		x.Add(&x, One)   // x is in [1, ..., Q]
+		y.Exp(&g, &x, P) // y = g^x mod P
 
 		n := 10
 
@@ -136,7 +140,6 @@ func TestVerifiableSecretShuffle(test *testing.T) {
 		err := CheckVerifiableSecretShuffle(e, E, *P, *Q, g, y, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
 
 		if err != nil {
-			// fmt.Println(err)
 			test.Error(err)
 		}
 	}
