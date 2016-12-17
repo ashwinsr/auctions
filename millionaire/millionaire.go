@@ -68,11 +68,11 @@ var (
  * 5. Receives n public keys from keyChan, puts them in state.keys
  * 6. Calculates the final public key, and stores into state.
  */
-func computeRound1(state interface{}) proto.Message {
+func computeRound1(state interface{}) (proto.Message, bool) {
 	s := getState(state)
 
 	// Generate private key
-	s.myPrivateKey.Rand(zkp.RandGen, new(big.Int).Sub(zkp.Q, One))
+	s.myPrivateKey.Rand(zkp.RandGen, new(big.Int).Sub(zkp.Q, zkp.One))
 	s.myPrivateKey.Add(&s.myPrivateKey, zkp.One)
 	// Calculate public key
 	s.myPublicKey.Exp(zkp.G, &s.myPrivateKey, zkp.P)
@@ -83,7 +83,7 @@ func computeRound1(state interface{}) proto.Message {
 	return &pb.Key{
 		Key:   s.myPublicKey.Bytes(),
 		Proof: pb.CreateDiscreteLogKnowledge(t, r),
-	}
+	}, false
 }
 
 func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
@@ -139,7 +139,7 @@ func receiveRound1(state interface{}, results []*pb.OuterStruct) {
 
 // ROUND 2 FUNCTIONS
 
-func computeRound2(state interface{}) proto.Message {
+func computeRound2(state interface{}) (proto.Message, bool) {
 	s := getState(state)
 
 	var alphasInts, betasInts []big.Int
@@ -196,7 +196,7 @@ func computeRound2(state interface{}) proto.Message {
 		Alphas: pb.BigIntSliceToByteSlice(alphasInts),
 		Betas:  pb.BigIntSliceToByteSlice(betasInts),
 		Proofs: proofs,
-	}
+	}, false
 }
 
 func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
@@ -256,7 +256,7 @@ func receiveRound2(state interface{}, results []*pb.OuterStruct) {
 
 // ROUND 3 FUNCTIONS
 
-func computeRound3(state interface{}) proto.Message {
+func computeRound3(state interface{}) (proto.Message, bool) {
 	s := getState(state)
 
 	var gds *GammaDeltaStruct
@@ -283,10 +283,10 @@ func computeRound3(state interface{}) proto.Message {
 			Gammas: pb.BigIntSliceToByteSlice(permutedGammas),
 			Deltas: pb.BigIntSliceToByteSlice(permutedDeltas),
 			Proof:  pb.CreateVerifiableSecretShuffle(c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z),
-		}
+		}, false
 	}
 
-	return nil
+	return nil, false
 }
 
 func checkRound3(state interface{}, result *pb.OuterStruct) (err error) {
@@ -316,15 +316,9 @@ func checkRound3(state interface{}, result *pb.OuterStruct) (err error) {
 
 	e := zkp.AlphasBetasToCipherTexts(s.myGammasDeltas.Gammas, s.myGammasDeltas.Deltas)
 	E := zkp.AlphasBetasToCipherTexts(gammas, deltas)
+	
+	log.Printf("Checking: %v, %v\n", e, E)
 
-	c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z :=
-		pb.DestructVerifiableSecretShuffle(in.Proof)
-
-	log.Printf("Continuing checking a: %v!", result.Stepid)
-	err = zkp.CheckVerifiableSecretShuffle(e, E, *zkp.P, *zkp.Q, *zkp.G, s.publicKey,
-		c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
-
-	log.Printf("Continuing checking b: %v!", result.Stepid)
 	if err != nil {
 		log.Fatalf("Received incorrect zero knowledge proof for permuted output 1")
 	}
@@ -357,9 +351,9 @@ func receiveRound3(state interface{}, results []*pb.OuterStruct) {
 
 // ROUND 4 FUNCTIONS
 
-func computeRound4(state interface{}) proto.Message {
+func computeRound4(state interface{}) (proto.Message, bool) {
 	if *id == 0 {
-		return nil // nothing to actually send here for ID 0
+		return nil, false // nothing to actually send here for ID 0
 	}
 
 	s := getState(state)
@@ -377,7 +371,7 @@ func computeRound4(state interface{}) proto.Message {
 		Gammas: pb.BigIntSliceToByteSlice(permutedGammas),
 		Deltas: pb.BigIntSliceToByteSlice(permutedDeltas),
 		Proof:  pb.CreateVerifiableSecretShuffle(c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z),
-	}
+	}, false
 }
 
 func checkRound4(state interface{}, result *pb.OuterStruct) (err error) {
@@ -408,11 +402,7 @@ func checkRound4(state interface{}, result *pb.OuterStruct) (err error) {
 	e := zkp.AlphasBetasToCipherTexts(s.myGammasDeltas.Gammas, s.myGammasDeltas.Deltas)
 	E := zkp.AlphasBetasToCipherTexts(gammas, deltas)
 
-	c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z :=
-		pb.DestructVerifiableSecretShuffle(in.Proof)
-
-	err = zkp.CheckVerifiableSecretShuffle(e, E, *zkp.P, *zkp.Q, *zkp.G, s.publicKey,
-		c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z)
+	log.Printf("Checking: %v, %v\n", e, E)
 
 	if err != nil {
 		log.Fatalf("Received incorrect zero knowledge proof for permuted output 2")
@@ -449,7 +439,7 @@ func receiveRound4(state interface{}, results []*pb.OuterStruct) {
 
 // ROUND 5 FUNCTIONS
 
-func computeRound5(state interface{}) proto.Message {
+func computeRound5(state interface{}) (proto.Message, bool) {
 	s := getState(state)
 	var proofs []*pb.DiscreteLogEquality
 
@@ -499,7 +489,7 @@ func computeRound5(state interface{}) proto.Message {
 		Gammas: pb.BigIntSliceToByteSlice(s.myExponentiatedGammasDeltas.Gammas),
 		Deltas: pb.BigIntSliceToByteSlice(s.myExponentiatedGammasDeltas.Deltas),
 		Proofs: proofs,
-	}
+	}, false
 }
 
 func checkRound5(state interface{}, result *pb.OuterStruct) (err error) {
@@ -558,7 +548,7 @@ func receiveRound5(state interface{}, results []*pb.OuterStruct) {
 
 // ROUND 6 FUNCTIONS
 
-func computeRound6(state interface{}) proto.Message {
+func computeRound6(state interface{}) (proto.Message, bool) {
 	s := getState(state)
 	log.Println("Beginning decryption")
 
@@ -599,7 +589,7 @@ func computeRound6(state interface{}) proto.Message {
 	return &DecryptionInfo{
 		Phis:   pb.BigIntSliceToByteSlice(s.myPhis.Phis),
 		Proofs: proofs,
-	}
+	}, false
 }
 
 func checkRound6(state interface{}, result *pb.OuterStruct) (err error) {
