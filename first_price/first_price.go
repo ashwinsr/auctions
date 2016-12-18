@@ -1,3 +1,15 @@
+/*
+ * This file contains the implementation of a standard first price
+ * auction among multiple bidders for a single item. The description
+ * of the protocol itself can be found in:
+ *
+ * Brandt, Felix. "How to obtain full privacy in auctions."
+ * International Journal of Information Security 5.4 (2006): 201-216.
+ *
+ * To invoke, run:
+ *          go run *.go -bid=<BID VALUE>
+ */
+
 package main
 
 import (
@@ -17,6 +29,7 @@ var (
 	bid       = flag.Uint("bid", 0, "Amount of money")
 )
 
+// The maximum bid amount
 var K uint = 100
 
 type AlphaBetaStruct struct {
@@ -53,7 +66,6 @@ func main() {
 	hosts, myID := lib.GetHostsAndID()
 	*id = myID
 
-
 	myAddr := hosts[*id]
 	lib.Init(*id)
 
@@ -65,7 +77,8 @@ func main() {
 	lib.InitClients(hosts, myAddr)
 
 	var rounds []lib.Round
-	
+
+	// Register all the computation rounds with the library
 	if *id == 0 {
 		// If seller
 		rounds = []lib.Round{
@@ -73,7 +86,7 @@ func main() {
 			{computeRound1, checkRound1, receiveRound1},
 			{computeRound2, checkRound2, receiveRound2},
 			{computeRound3, checkRound3, sellerReceiveRound3},
-		}	
+		}
 	} else {
 		// If bidder
 		rounds = []lib.Round{
@@ -81,9 +94,9 @@ func main() {
 			{computeRound1, checkRound1, receiveRound1},
 			{computeRound2, checkRound2, receiveRound2},
 			{computeRound3, checkRound3, receiveRound3},
-		}		
+		}
 	}
-	
+
 	lib.Register(rounds, myState)
 
 }
@@ -94,18 +107,6 @@ func getFpState(state interface{}) (s *FpState) {
 		log.Fatalf("Failed to typecast FpState.\n")
 	}
 	return
-}
-
-func computeArrayRangeProduct(arr []big.Int, start, end uint) big.Int {
-	var product big.Int
-	product.Set(zkp.One)
-
-	for i := start; i < end; i++ {
-		product.Mul(&product, &arr[i])
-		product.Mod(&product, zkp.P) // TODO Check Mod
-	}
-
-	return product
 }
 
 func checkPrologue(state interface{}, result *pb.OuterStruct) (err error) {
@@ -139,7 +140,7 @@ func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
 	}
 
 	if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != K {
-		log.Fatalf("Incorrect number of shit1")
+		log.Fatalf("Incorrect number of alpha/betas in round 1")
 	}
 
 	alphas := pb.ByteSliceToBigIntSlice(in.Alphas)
@@ -190,23 +191,17 @@ func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 		log.Fatalf("Failed to unmarshal Round2.\n")
 	}
 
-	// TODO need error checking
-
-	// if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != K {
-	// 	log.Fatalf("Incorrect number of shit2: %v %v %v %v", len(in.Gammas), len(in.Deltas), len(in.Proofs), K)
-	// }
-
 	if len(in.DoubleGammas) != len(in.DoubleDeltas) ||
 		len(in.DoubleDeltas) != len(in.DoubleProofs) ||
 		len(in.DoubleGammas) != len(s.keys) {
-		log.Fatalf("Incorrect number of outer shit")
+		log.Fatalf("Incorrect number of double gamma/deltas")
 	}
 
 	for i := 0; i < len(in.DoubleGammas); i++ {
 		if len(in.DoubleGammas[i].Gammas) != len(in.DoubleDeltas[i].Deltas) ||
 			len(in.DoubleDeltas[i].Deltas) != len(in.DoubleProofs[i].Proofs) ||
 			len(in.DoubleGammas[i].Gammas) != int(K) {
-			log.Fatalf("Incorrect number of inner shit %v %v %v\n",
+			log.Fatalf("Incorrect number of proofs in round 2 %v %v %v\n",
 				len(in.DoubleGammas[i].Gammas),
 				len(in.DoubleDeltas[i].Deltas),
 				len(in.DoubleProofs[i].Proofs))
@@ -245,21 +240,15 @@ func checkRound3(state interface{}, result *pb.OuterStruct) (err error) {
 		log.Fatalf("Failed to unmarshal Round2.\n")
 	}
 
-	// TODO need error checking
-
-	// if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != K {
-	// 	log.Fatalf("Incorrect number of shit2: %v %v %v %v", len(in.Gammas), len(in.Deltas), len(in.Proofs), K)
-	// }
-
 	if len(in.DoublePhis) != len(in.DoubleProofs) ||
 		len(in.DoubleProofs) != len(s.keys) {
-		log.Fatalf("Incorrect number of outer shit2")
+		log.Fatalf("Incorrect number of double phis in round 3")
 	}
 
 	for i := 0; i < len(in.DoublePhis); i++ {
 		if len(in.DoublePhis[i].Phis) != len(in.DoubleProofs[i].Proofs) ||
 			len(in.DoubleProofs[i].Proofs) != int(K) {
-			log.Fatalf("Incorrect number of inner shit2 %v %v\n",
+			log.Fatalf("Incorrect number of proofs in round 3 %v %v\n",
 				len(in.DoublePhis[i].Phis),
 				len(in.DoubleProofs[i].Proofs))
 		}
@@ -287,7 +276,6 @@ func checkRound3(state interface{}, result *pb.OuterStruct) (err error) {
 	return
 }
 
-// TODO decompose! Can be used in both millionaires and auction
 func receivePrologue(FpState interface{}, results []*pb.OuterStruct) {
 	s := getFpState(FpState)
 	var key pb.Key
@@ -380,7 +368,7 @@ func receiveRound3(FpState interface{}, results []*pb.OuterStruct) {
 		}
 
 		log.Printf("Received Clientid %v", results[a].Clientid)
-		
+
 		err := proto.Unmarshal(results[a].Data, &round3)
 		if err != nil {
 			log.Fatalf("Failed to unmarshal Round3.\n", results[a])
@@ -447,7 +435,8 @@ func computePrologue(FpState interface{}) (proto.Message, bool) {
 	s := getFpState(FpState)
 
 	// Generate private key
-	s.myPrivateKey.Rand(zkp.RandGen, zkp.Q)
+	s.myPrivateKey.Rand(zkp.RandGen, new(big.Int).Sub(zkp.Q, One))
+	s.myPrivateKey.Add(&s.myPrivateKey, zkp.One)
 	// Calculate public key
 	s.myPublicKey.Exp(zkp.G, &s.myPrivateKey, zkp.P)
 
@@ -478,7 +467,7 @@ func computeRound1(FpState interface{}) (proto.Message, bool) {
 		rJ.Rand(zkp.RandGen, zkp.Q)
 		sumR.Add(&sumR, &rJ)
 
-		alphaJ.Exp(&s.publicKey, &rJ, zkp.P) // TODO mod P?
+		alphaJ.Exp(&s.publicKey, &rJ, zkp.P)
 
 		if j == *bid {
 			m.Set(zkp.Y_Mill)
@@ -507,7 +496,7 @@ func computeRound1(FpState interface{}) (proto.Message, bool) {
 
 	var pMinusOne big.Int
 	pMinusOne.Sub(zkp.P, zkp.One)
-	sumR.Mod(&sumR, &pMinusOne) // TODO I think. Fermat's little theorem
+	sumR.Mod(&sumR, &pMinusOne)
 
 	gs := []big.Int{s.publicKey, *zkp.G}
 
@@ -603,15 +592,10 @@ func computeRound2(FpState interface{}) (proto.Message, bool) {
 			log.Printf("Created gammaExp/deltaExp %v/%v with proof values %v, %v, and bases %v",
 				gammaExp, deltaExp, ts, r, gs)
 		}
-
-		// log.Printf("Going to send gammas/deltas: %v\n%v",
-		// 	s.GammasDeltasBeforeExponentiation[*id].gammas,
-		// 	s.GammasDeltasBeforeExponentiation[*id].deltas)
 	}
 
 	log.Printf("[Round 2] Sending ID %v: %v\n", *id, s.GammasDeltasAfterExponentiation[*id])
 
-	// TODO no....
 	return &Round2{
 		DoubleProofs: proofs,
 		DoubleGammas: gammas,
@@ -659,7 +643,7 @@ func computeRound3(FpState interface{}) (proto.Message, bool) {
 			proofs[i].Proofs = append(proofs[i].Proofs, pb.CreateDiscreteLogEquality(ts, r))
 		}
 
-		log.Printf("Hullo: %v %v\n", i, len(s.PhisAfterExponentiation[*id][i]))
+		log.Printf("Round 3: %v %v\n", i, len(s.PhisAfterExponentiation[*id][i]))
 
 		doublePhis = append(doublePhis, &Phis{
 			Phis: pb.BigIntSliceToByteSlice(s.PhisAfterExponentiation[*id][i]),
@@ -672,7 +656,7 @@ func computeRound3(FpState interface{}) (proto.Message, bool) {
 		DoubleProofs: proofs,
 	}
 	if *id == 0 {
-		s.sellerRound3 = round3	
+		s.sellerRound3 = round3
 	}
 	return &round3, true
 }
@@ -689,8 +673,6 @@ func epilogue(s *FpState) {
 				return &s.PhisAfterExponentiation[i][a][j]
 			})
 
-			//log.Printf("Numerator: %v, Denominator: %v", numerator, denominator)
-
 			denominator.ModInverse(denominator, zkp.P)
 
 			var vAJ big.Int
@@ -698,17 +680,17 @@ func epilogue(s *FpState) {
 			vAJ.Mod(&vAJ, zkp.P)
 
 			if vAJ.Cmp(zkp.One) == 0 {
-			    if (a == *id) {
+				if a == *id {
 					log.Printf("I won at selling price %v!", j)
 				} else {
-				    log.Printf("I did not win. ID %v won at selling price %v.", a, j)
+					log.Printf("I did not win. ID %v won at selling price %v.", a, j)
 				}
 			}
 		}
 	}
 
 	for true {
-		
+
 	}
 	log.Fatalf("Done")
 }

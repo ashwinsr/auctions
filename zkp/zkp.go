@@ -202,7 +202,13 @@ func EncryptedValueIsOneOfTwo(m big.Int, y big.Int, r big.Int, g big.Int, z big.
 	return a_1, a_2, b_1, b_2, d_1, d_2, r_1, r_2
 }
 
-func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, y big.Int, g big.Int, p big.Int, q big.Int, pi Permutation, R []big.Int) (c []big.Int, cd big.Int, cD big.Int, ER Ciphertext, f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int, yD big.Int, zD big.Int, Z big.Int) {
+func VerifiableSecretShuffle(e []Ciphertext, E []Ciphertext,
+	y big.Int, g big.Int, p big.Int, q big.Int,
+	pi Permutation, R []big.Int) (
+	c []big.Int, cd big.Int, cD big.Int, ER Ciphertext,
+	f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int,
+	yD big.Int, zD big.Int, Z big.Int) {
+
 	var rd, rD, sd, sD, delta, RR big.Int
 	var n int
 	n = len(e)
@@ -406,8 +412,6 @@ func GenerateG(p *big.Int, q *big.Int) big.Int {
 }
 
 // g is arbitrary generator of G_q, y is public key, t and r are the ZKP, and p and q are the primes
-// TODO code quality, structs, etc...
-// TODO should probably use big.Int pointers everywhere
 func CheckDiscreteLogKnowledgeProof(g big.Int, y big.Int, t big.Int, r big.Int, p big.Int, q big.Int) (err error) {
 	var tv big.Int
 
@@ -487,7 +491,6 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	temp_1.Mod(&temp_1, &q)
 	if temp_1.Cmp(&c) != 0 {
 		err = fmt.Errorf("1 - WRONG! Calculated %v, received %v.\n", temp_1, c)
-		fmt.Println("1")
 	}
 
 	// Check a_1 = g^r_1 * beta^d_1
@@ -497,7 +500,6 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	temp_1.Mod(&temp_1, &p)
 	if temp_1.Cmp(&a_1) != 0 {
 		err = fmt.Errorf("2 - WRONG! Calculated %v, received %v.\n", temp_1, a_1)
-		fmt.Println("2")
 	}
 
 	// Check a_2 = g^r_2 * beta^d_2
@@ -507,7 +509,6 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	temp_1.Mod(&temp_1, &p)
 	if temp_1.Cmp(&a_2) != 0 {
 		err = fmt.Errorf("3 - WRONG! Calculated %v, received %v.\n", temp_1, a_2)
-		fmt.Println("3")
 	}
 
 	// Check b_1 = y^r_1 * (alpha/z)^d_1
@@ -519,7 +520,6 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	temp_1.Mod(&temp_1, &p)
 	if temp_1.Cmp(&b_1) != 0 {
 		err = fmt.Errorf("4 - WRONG! Calculated %v, received %v.\n", temp_1, b_1)
-		fmt.Println("4")
 	}
 
 	// Check b_2 = y^r_2 * alpha^d_2
@@ -529,13 +529,16 @@ func CheckEncryptedValueIsOneOfTwo(alpha big.Int, beta big.Int,
 	temp_1.Mod(&temp_1, &p)
 	if temp_1.Cmp(&b_2) != 0 {
 		err = fmt.Errorf("5 - WRONG! Calculated %v, received %v.\n", temp_1, b_2)
-		fmt.Println("5")
 	}
 
 	return
 }
 
-func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, p big.Int, q big.Int, g big.Int, y big.Int, c []big.Int, cd big.Int, cD big.Int, ER Ciphertext, f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int, yD big.Int, zD big.Int, Z big.Int) (err error) {
+func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext,
+	p big.Int, q big.Int, g big.Int, y big.Int,
+	c []big.Int, cd big.Int, cD big.Int, ER Ciphertext,
+	f []big.Int, fd big.Int, yd big.Int, zd big.Int, F []big.Int,
+	yD big.Int, zD big.Int, Z big.Int) (err error) {
 
 	h := sha256.New()
 	n := len(e)
@@ -563,13 +566,13 @@ func CheckVerifiableSecretShuffle(e []Ciphertext, E []Ciphertext, p big.Int, q b
 		var ct big.Int
 		ct.Exp(&c[i], &t[i], nil)
 		LHS1.Mul(&LHS1, &ct)
-		// LHS1.Mod(&LHS1, ) This needs to be figured out
+		// LHS1.Mod(&LHS1, ) This needs to be figured out TODO
 
 		ct.Mul(&t[i], &t[i])
 		ct.Exp(&c[i], &ct, nil) // Modulo issues
 
 		LHS2.Mul(&LHS2, &ct)
-		// LHS2.Mod(LHS2, ) This needs to be figured out
+		// LHS2.Mod(LHS2, ) This needs to be figured out TODO
 
 		var Ef Ciphertext
 		Ef.Alpha.Exp(&E[i].Alpha, &f[i], &p)

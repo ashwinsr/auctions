@@ -32,7 +32,6 @@ type state struct {
 	publicKey    big.Int
 	currRound    int
 
-	// TODO millionaire specific
 	myAlphasBetas                 *AlphaBetaStruct
 	theirAlphasBetas              *AlphaBetaStruct
 	myGammasDeltas                *GammaDeltaStruct
@@ -56,13 +55,11 @@ func getState(state_ interface{}) (s *state) {
 var (
 	myAddress = flag.String("address", "localhost:1234", "address")
 	bid       = flag.Uint("bid", 0, "Amount of money")
-	// id        = flag.Int("id", -1, "ID")
-	id = new(int)
+	id        = new(int)
 )
 
 // ROUND 1 FUNCTIONS
 
-// TODO delete comment
 /*
  * 1. Generates a private/public key pair
  * 2. Generates zero-knowledge-proof of private key
@@ -71,11 +68,12 @@ var (
  * 5. Receives n public keys from keyChan, puts them in state.keys
  * 6. Calculates the final public key, and stores into state.
  */
-func computeRound1(state interface{}) proto.Message {
+func computeRound1(state interface{}) (proto.Message, bool) {
 	s := getState(state)
 
 	// Generate private key
-	s.myPrivateKey.Rand(zkp.RandGen, zkp.Q)
+	s.myPrivateKey.Rand(zkp.RandGen, new(big.Int).Sub(zkp.Q, zkp.One))
+	s.myPrivateKey.Add(&s.myPrivateKey, zkp.One)
 	// Calculate public key
 	s.myPublicKey.Exp(zkp.G, &s.myPrivateKey, zkp.P)
 
@@ -85,7 +83,7 @@ func computeRound1(state interface{}) proto.Message {
 	return &pb.Key{
 		Key:   s.myPublicKey.Bytes(),
 		Proof: pb.CreateDiscreteLogKnowledge(t, r),
-	}
+	}, false
 }
 
 func checkRound1(state interface{}, result *pb.OuterStruct) (err error) {
@@ -130,7 +128,6 @@ func receiveRound1(state interface{}, results []*pb.OuterStruct) {
 	}
 
 	// Calculating final public key
-	// TODO SHOULD THIS BE MOD P? Probably doesn't matter, but just for computational practicality
 	s.publicKey.Set(zkp.One)
 	for _, key := range s.keys {
 		s.publicKey.Mul(&s.publicKey, &key)
@@ -142,7 +139,7 @@ func receiveRound1(state interface{}, results []*pb.OuterStruct) {
 
 // ROUND 2 FUNCTIONS
 
-func computeRound2(state interface{}) proto.Message {
+func computeRound2(state interface{}) (proto.Message, bool) {
 	s := getState(state)
 
 	var alphasInts, betasInts []big.Int
@@ -162,7 +159,7 @@ func computeRound2(state interface{}) proto.Message {
 
 		// calculate alpha_j
 		// log.Printf("Public key: %v, Rj: %v, P: %v\n", s.publicKey, rJ, *zkp.P)
-		alphaJ.Exp(&s.publicKey, &rJ, zkp.P) // TODO mod P?
+		alphaJ.Exp(&s.publicKey, &rJ, zkp.P)
 		if Bij == 1 {
 			alphaJ.Mul(&alphaJ, zkp.Y_Mill)
 			alphaJ.Mod(&alphaJ, zkp.P)
@@ -170,8 +167,6 @@ func computeRound2(state interface{}) proto.Message {
 
 		// calculate beta_j
 		betaJ.Exp(zkp.G, &rJ, zkp.P)
-		// log.Printf("alpha_%v: %v\n", j, alphaJ)
-		// log.Printf("beta_%v: %v\n", j, betaJ)
 
 		alphasInts = append(alphasInts, alphaJ)
 		betasInts = append(betasInts, betaJ)
@@ -194,14 +189,14 @@ func computeRound2(state interface{}) proto.Message {
 		betas:  betasInts,
 	}
 
-	fmt.Println("Length of proofs")
-	fmt.Println(len(proofs))
+	// log.Println("Length of proofs: ")
+	// log.Println(len(proofs))
 
 	return &AlphaBeta{
 		Alphas: pb.BigIntSliceToByteSlice(alphasInts),
 		Betas:  pb.BigIntSliceToByteSlice(betasInts),
 		Proofs: proofs,
-	}
+	}, false
 }
 
 func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
@@ -220,7 +215,7 @@ func checkRound2(state interface{}, result *pb.OuterStruct) (err error) {
 	fmt.Println(zkp.K_Mill)
 
 	if len(in.Alphas) != len(in.Betas) || len(in.Proofs) != len(in.Betas) || uint(len(in.Proofs)) != zkp.K_Mill {
-		log.Fatalf("Incorrect number of shit")
+		log.Fatalf("Incorrect number of alpha/betas in round 2")
 	}
 
 	alphas := pb.ByteSliceToBigIntSlice(in.Alphas)
@@ -261,7 +256,7 @@ func receiveRound2(state interface{}, results []*pb.OuterStruct) {
 
 // ROUND 3 FUNCTIONS
 
-func computeRound3(state interface{}) proto.Message {
+func computeRound3(state interface{}) (proto.Message, bool) {
 	s := getState(state)
 
 	var gds *GammaDeltaStruct
@@ -272,48 +267,186 @@ func computeRound3(state interface{}) proto.Message {
 		gds = MillionaireCalculateGammaDelta(s.theirAlphasBetas.alphas, s.myAlphasBetas.alphas,
 			s.theirAlphasBetas.betas, s.myAlphasBetas.betas, *zkp.Y_Mill, *zkp.P)
 	}
-	// TODO for now just set both
+
 	s.myGammasDeltas = gds
 	s.theirGammasDeltas = gds
 
-	return nil
+	if *id == 0 {
+		// if our ID is 0 we verifiably secret shuffle
+		e := zkp.AlphasBetasToCipherTexts(s.myGammasDeltas.Gammas, s.myGammasDeltas.Deltas)
+		E, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z :=
+			zkp.RandomlyPermute(e, *zkp.P, *zkp.Q, *zkp.G, s.publicKey)
+		permutedGammas, permutedDeltas := zkp.CipherTextsToAlphasBetas(E)
+		s.myGammasDeltas.Gammas = permutedGammas
+		s.myGammasDeltas.Deltas = permutedDeltas
+		return &MixedOutput{
+			Gammas: pb.BigIntSliceToByteSlice(permutedGammas),
+			Deltas: pb.BigIntSliceToByteSlice(permutedDeltas),
+			Proof:  pb.CreateVerifiableSecretShuffle(c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z),
+		}, false
+	}
+
+	return nil, false
 }
 
 func checkRound3(state interface{}, result *pb.OuterStruct) (err error) {
-	return nil
+	log.Printf("About to check for round %v", result.Stepid)
+	// if we are ID 0, we should not receive anything in this round.
+	if *id == 0 {
+		return nil
+	}
+	// otherwise, we have received shuffled gammas/deltas
+	s := getState(state)
+	var in MixedOutput
+
+	err = proto.Unmarshal(result.Data, &in)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal MixedOutput.\n")
+	}
+
+	fmt.Println(len(in.Gammas))
+	fmt.Println(len(in.Deltas))
+
+	if len(in.Gammas) != len(in.Deltas) {
+		log.Fatalf("Incorrect number of gammas/deltas received from id %v", result.Clientid)
+	}
+
+	gammas := pb.ByteSliceToBigIntSlice(in.Gammas)
+	deltas := pb.ByteSliceToBigIntSlice(in.Deltas)
+
+	e := zkp.AlphasBetasToCipherTexts(s.myGammasDeltas.Gammas, s.myGammasDeltas.Deltas)
+	E := zkp.AlphasBetasToCipherTexts(gammas, deltas)
+	
+	log.Printf("Checking: %v, %v\n", e, E)
+
+	if err != nil {
+		log.Fatalf("Received incorrect zero knowledge proof for permuted output 1")
+	}
+
+	log.Printf("Checked for round %v!", result.Stepid)
+	return err
 }
 
 func receiveRound3(state interface{}, results []*pb.OuterStruct) {
-	return
+	log.Printf("About to receive for round %v", results[1-*id].Stepid)
+	if *id == 0 {
+		return // nothing to actually receive here for ID 0, do not try to demartial
+	}
+	s := getState(state)
+	var mixedOutput MixedOutput
+
+	// Wait for alphas and betas of other client
+	for i := 0; i < len(results); i++ {
+		if i == *id {
+			continue
+		}
+		err := proto.Unmarshal(results[i].Data, &mixedOutput)
+		if err != nil {
+			log.Fatalf("Failed to unmarshal MixedOutput.\n")
+		}
+		s.theirGammasDeltas.Gammas = pb.ByteSliceToBigIntSlice(mixedOutput.Gammas)
+		s.theirGammasDeltas.Deltas = pb.ByteSliceToBigIntSlice(mixedOutput.Deltas)
+	}
 }
 
 // ROUND 4 FUNCTIONS
 
-func computeRound4(state interface{}) proto.Message {
-	return nil
+func computeRound4(state interface{}) (proto.Message, bool) {
+	if *id == 0 {
+		return nil, false // nothing to actually send here for ID 0
+	}
+
+	s := getState(state)
+
+	// if our ID is 1 we verifiably secret shuffle what we received from ID 0 last round
+	e := zkp.AlphasBetasToCipherTexts(s.theirGammasDeltas.Gammas, s.theirGammasDeltas.Deltas)
+	E, c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z :=
+		zkp.RandomlyPermute(e, *zkp.P, *zkp.Q, *zkp.G, s.publicKey)
+	permutedGammas, permutedDeltas := zkp.CipherTextsToAlphasBetas(E)
+	s.myGammasDeltas.Gammas = permutedGammas
+	s.myGammasDeltas.Deltas = permutedDeltas
+	s.theirGammasDeltas.Gammas = permutedGammas
+	s.theirGammasDeltas.Deltas = permutedDeltas
+	return &MixedOutput{
+		Gammas: pb.BigIntSliceToByteSlice(permutedGammas),
+		Deltas: pb.BigIntSliceToByteSlice(permutedDeltas),
+		Proof:  pb.CreateVerifiableSecretShuffle(c, cd, cD, ER, f, fd, yd, zd, F, yD, zD, Z),
+	}, false
 }
 
 func checkRound4(state interface{}, result *pb.OuterStruct) (err error) {
-	return nil
+	log.Printf("About to check for round %v", result.Stepid)
+	// if we are ID 1, we should not receive anything real in this round.
+	if *id == 1 {
+		return nil
+	}
+	// otherwise, we have received shuffled gammas/deltas
+	s := getState(state)
+	var in MixedOutput
+
+	err = proto.Unmarshal(result.Data, &in)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal MixedOutput.\n")
+	}
+
+	fmt.Println(len(in.Gammas))
+	fmt.Println(len(in.Deltas))
+
+	if len(in.Gammas) != len(in.Deltas) {
+		log.Fatalf("Incorrect number of gammas/deltas received from id %v", result.Clientid)
+	}
+
+	gammas := pb.ByteSliceToBigIntSlice(in.Gammas)
+	deltas := pb.ByteSliceToBigIntSlice(in.Deltas)
+
+	e := zkp.AlphasBetasToCipherTexts(s.myGammasDeltas.Gammas, s.myGammasDeltas.Deltas)
+	E := zkp.AlphasBetasToCipherTexts(gammas, deltas)
+
+	log.Printf("Checking: %v, %v\n", e, E)
+
+	if err != nil {
+		log.Fatalf("Received incorrect zero knowledge proof for permuted output 2")
+	}
+
+	return err
 }
 
 func receiveRound4(state interface{}, results []*pb.OuterStruct) {
-	return
+	log.Printf("About to receive for round %v", results[1-*id].Stepid)
+	// if we are ID 1, we should not receive anything real in this round.
+	if *id == 1 {
+		return
+	}
+
+	s := getState(state)
+	var mixedOutput MixedOutput
+
+	// Wait for alphas and betas of other client
+	for i := 0; i < len(results); i++ {
+		if i == *id {
+			continue
+		}
+		err := proto.Unmarshal(results[i].Data, &mixedOutput)
+		if err != nil {
+			log.Fatalf("Failed to unmarshal MixedOutput.\n")
+		}
+		s.theirGammasDeltas.Gammas = pb.ByteSliceToBigIntSlice(mixedOutput.Gammas)
+		s.theirGammasDeltas.Deltas = pb.ByteSliceToBigIntSlice(mixedOutput.Deltas)
+		s.myGammasDeltas.Gammas = s.theirGammasDeltas.Gammas
+		s.myGammasDeltas.Deltas = s.theirGammasDeltas.Deltas
+	}
 }
 
 // ROUND 5 FUNCTIONS
 
-func computeRound5(state interface{}) proto.Message {
+func computeRound5(state interface{}) (proto.Message, bool) {
 	s := getState(state)
 	var proofs []*pb.DiscreteLogEquality
 
 	s.myExponentiatedGammasDeltas = &GammaDeltaStruct{}
 
 	// compute exponentiated gamma and delta
-	// TODO for now myGammasDeltas
 	for j := 0; j < int(zkp.K_Mill); j++ {
-		// log.Println("Beginning random exponentiation2")
-
 		// this is our random exponent
 		var m big.Int
 		m.Rand(zkp.RandGen, zkp.Q)
@@ -321,7 +454,6 @@ func computeRound5(state interface{}) proto.Message {
 		var newGamma, newDelta big.Int
 		newGamma.Exp(&s.myGammasDeltas.Gammas[j], &m, zkp.P)
 		newDelta.Exp(&s.myGammasDeltas.Deltas[j], &m, zkp.P)
-		// log.Println("Beginning random exponentiation3")
 
 		log.Printf("Computed m_%v = %v, gamma_%v = %v, delta_%v = %v\n", j, m.String(), j, newGamma.String(), j, newDelta.String())
 
@@ -338,7 +470,6 @@ func computeRound5(state interface{}) proto.Message {
 		// create proof and add it to proof list
 		ts, r := zkp.DiscreteLogEquality(m, gs, *zkp.P, *zkp.Q)
 
-		// TODO remove
 		//checking the proof here before we send it
 		var results, results2 []big.Int
 		var a, b big.Int
@@ -348,14 +479,6 @@ func computeRound5(state interface{}) proto.Message {
 		results = append(results, b)
 		results2 = append(results2, s.myExponentiatedGammasDeltas.Gammas[j])
 		results2 = append(results2, s.myExponentiatedGammasDeltas.Deltas[j])
-		// err := zkp.CheckDiscreteLogEqualityProof(gs, results, ts, r, *zkp.P, *zkp.Q)
-		// // log.Printf("Creating proof.\nBases=%v\nExponent=%v\nResults=%v\nResults2=%v\nTs=%vn,R=%v\n", gs, m, results, results2, ts, r)
-		// if err != nil {
-		// 	log.Printf("WHAT THE heck %v\n", err)
-		// } else {
-		// 	// log.Printf("Yay!!! Correct exponentiatedGammas exponentiatedDeltas proof")
-		// }
-		// TODO done
 
 		proofs = append(proofs, pb.CreateDiscreteLogEquality(ts, r))
 
@@ -366,7 +489,7 @@ func computeRound5(state interface{}) proto.Message {
 		Gammas: pb.BigIntSliceToByteSlice(s.myExponentiatedGammasDeltas.Gammas),
 		Deltas: pb.BigIntSliceToByteSlice(s.myExponentiatedGammasDeltas.Deltas),
 		Proofs: proofs,
-	}
+	}, false
 }
 
 func checkRound5(state interface{}, result *pb.OuterStruct) (err error) {
@@ -379,7 +502,7 @@ func checkRound5(state interface{}, result *pb.OuterStruct) (err error) {
 	}
 
 	if len(in.Gammas) != len(in.Deltas) || len(in.Proofs) != len(in.Deltas) || uint(len(in.Proofs)) != zkp.K_Mill {
-		log.Fatalf("Incorrect number of shit4")
+		log.Fatalf("Incorrect number of gamma/deltas in round 5")
 	}
 
 	gammas := pb.ByteSliceToBigIntSlice(in.Gammas)
@@ -425,9 +548,9 @@ func receiveRound5(state interface{}, results []*pb.OuterStruct) {
 
 // ROUND 6 FUNCTIONS
 
-func computeRound6(state interface{}) proto.Message {
+func computeRound6(state interface{}) (proto.Message, bool) {
 	s := getState(state)
-	// log.Println("Beginning decryption")
+	log.Println("Beginning decryption")
 
 	var proofs []*pb.DiscreteLogEquality
 
@@ -435,7 +558,6 @@ func computeRound6(state interface{}) proto.Message {
 	s.phisBeforeExponentiation = new(PhiStruct)
 
 	// compute exponentiated gamma and delta
-	// TODO for now myGammasDeltas
 	for i := 0; i < int(zkp.K_Mill); i++ {
 		// calculate phi
 		var phi, phi2 big.Int
@@ -467,7 +589,7 @@ func computeRound6(state interface{}) proto.Message {
 	return &DecryptionInfo{
 		Phis:   pb.BigIntSliceToByteSlice(s.myPhis.Phis),
 		Proofs: proofs,
-	}
+	}, false
 }
 
 func checkRound6(state interface{}, result *pb.OuterStruct) (err error) {
@@ -481,7 +603,7 @@ func checkRound6(state interface{}, result *pb.OuterStruct) (err error) {
 
 	if len(in.Phis) != len(in.Proofs) || uint(len(in.Proofs)) != zkp.K_Mill {
 		log.Printf("len of phis=%v, len of proofs=%v, k=%v\n", len(in.Phis), uint(len(in.Proofs)), zkp.K_Mill)
-		log.Fatalf("Incorrect number of shit6")
+		log.Fatalf("Incorrect number of phis or proofs in round 6")
 	}
 
 	phis := pb.ByteSliceToBigIntSlice(in.Phis)
@@ -517,7 +639,8 @@ func receiveRound6(state interface{}, results []*pb.OuterStruct) {
 		log.Fatalf("Failed to unmarshal DecryptionInfo.\n")
 	}
 	log.Printf("%v\n", decInfo)
-	// Calculate the final shit (division + which one is bigger)
+
+	// Calculate the final output (division + which one is bigger)
 	phis := pb.ByteSliceToBigIntSlice(decInfo.Phis)
 	for j := 0; j < int(zkp.K_Mill); j++ {
 
@@ -534,16 +657,6 @@ func receiveRound6(state interface{}, results []*pb.OuterStruct) {
 		}
 	}
 	log.Fatalf("ID 1 is the winner\n")
-}
-
-func getID(hosts []string) int {
-	for i, host := range hosts {
-		if host == *myAddress {
-			return i
-		}
-	}
-
-	return -1
 }
 
 func main() {

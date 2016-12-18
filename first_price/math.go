@@ -34,7 +34,7 @@ func Round2ComputeInitialValue(n, k, j int, p *big.Int, getNum GetNumFunc) (cach
 	return
 }
 
-// TODO make sure right indices
+// Ensre that you use the right indices
 // returns (result_(id))^m, [](result_(id))
 func Round2ComputeOutcome(i, j int, p, cachedVal *big.Int, getNum GetNumFunc) big.Int {
 	var result big.Int
@@ -48,7 +48,7 @@ func Round2ComputeOutcome(i, j int, p, cachedVal *big.Int, getNum GetNumFunc) bi
 	result.Mul(&result, secondResult)
 	result.Mod(&result, p)
 
-	// TODO this part is for TIEBREAKING
+	// This part is for TIEBREAKING
 	// thirdResult := Multiply(0, i, p, func(h int) *big.Int {
 	// 	return getNum(h, j)
 	// })

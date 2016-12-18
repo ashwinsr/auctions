@@ -1,27 +1,29 @@
-TODO
+Registering for an auction
+--------------------------
+First, start up the server using `python register_server.py`. By default it
+will run on port 80.
 
-- Move things to command line arguments
-- Write python "Makefile" (runs protobuf generator and go test)
-- Write better discovery of hosts
+Creating a new auction: `curl <Server IP>/create`
 
+Registering for a new auction: `wget --content-disposition <Server IP>/register`
 
-1.
-- SSL (look into how gRPC deals with SSL. Need to encrypt with our private key and their public key)
-- Incorporate random shuffle
-- Factor ZKP code
+Downloading the auction file: `wget --content-disposition <Server IP>/download_auc`
 
-2.
-- Generalize
-- Joining an auction (auction file formats, etc.)
-- Read 2006 paper
+A few notes about registering for an auction:
 
-3.
-- 2006 paper (in generalized framework)
+1. By convention, the seller should first create the auction, and be the first
+   to register for the auction.
+   
+2. Registering for the auction will automatically download signed certificates.
+   Place the certificate and the key in the `certs/` folder.
+   
+3. Download the auction file after every bidder has registered. Overwrite the
+   existing `hosts.auc` file in the home directory.
 
-4.
-FIX OUR TWO SECURITY BUGS:
--We have two rpc functions connecting over SSL. It needs to be peer authentication, one bidirectional connection per client (connect to someone lower than you, establish a bidirectional stream of OuterStructs. Both sides need to check each others' certificates.
--CANNOT pass client_id over network, a client can fake that
+Running an auction
+------------------
+After registration is completed, to run an auction, go into the `first_price/`
+folder and execute:
+	  `go run *.go -bid=<BID VALUE>`
 
-5.
-- Further (general purpose auctions, multi-unit auctions...)
+Note, that we have currently limited bids to be 0 <= BID VALUE < 100.
