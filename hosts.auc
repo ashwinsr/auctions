@@ -1,1 +1,1 @@
-{"myID": 1, "hosts": ["localhost:9001", "localhost:9002"], "seller": "localhost:9001"}
+{"myID": 1, "hosts": ["10.35.50.3:9001", "10.35.48.88:9002"], "seller": "10.35.50.3:9001"}

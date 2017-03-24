@@ -9,7 +9,10 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
+
 
 	"crypto/tls"
 	"crypto/x509"
@@ -28,8 +31,10 @@ import (
 )
 
 var (
-	id           int
-	numRound     int32 = 0
+	id            int
+	numRound      int32 = 0
+	bytesSent	  int64 = 0
+	bytesReceived int64 = 0
 	data         []*pb.OuterStruct
 	dataLock     sync.Mutex
 	clientsReady sync.Once
@@ -76,6 +81,13 @@ func (s *server) Publish(ctx context.Context, in *pb.OuterStruct) (*google_proto
 		log.Printf("RECEIVED DATA FOR ROUND ***************************** %v, Client id: %v", in.Stepid, in.Clientid)
 
 		numRoundLock.Unlock()
+		
+		// r := reflect.ValueOf(in)
+		// inSize := int64(binary.Size(r))
+
+		inSize := int64(unsafe.Sizeof(*in))
+		fmt.Println("SIZE: %v", inSize)
+		_ = atomic.AddInt64(&bytesReceived, inSize) 
 
 		receivedIdChan <- in.Clientid
 	}()
@@ -310,6 +322,8 @@ func Register(rounds []Round, state interface{}) {
 		numRound++
 		readyToReceiveNextRound.Broadcast()
 		numRoundLock.Unlock()
+			
+		outSize := int64(unsafe.Sizeof(*out))
 
 		if sendToSeller {
 			if id != 0 {
@@ -321,12 +335,19 @@ func Register(rounds []Round, state interface{}) {
 			}
 		} else {
 			log.Printf("Publishing %v", round, id)
+			outSize = outSize * int64(len(clients))
 			PublishAll(out)
 		}
 
+		_ = atomic.AddInt64(&bytesSent, outSize)
 		checkAll(state, round.Check)
 		round.Receive(state, data)
 	}
+}
+
+func DisplayData() {
+	fmt.Println("Bytes Sent: %v", bytesSent)
+	fmt.Println("Bytes Received: %v", bytesReceived)
 }
 
 func Init(id_ int) {
